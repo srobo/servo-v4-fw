@@ -18,12 +18,12 @@ CFLAGS += -mcpu=cortex-m3 -mthumb -msoft-float -DSTM32F1 \
 #	   -L$(TOOLCHAIN_DIR)/lib/stm32/f1 -lnosys -T$(LDSCRIPT) \
 #	   -nostartfiles -Wl,--gc-sections,-Map=pbv4.map -mcpu=cortex-m3 \
 #	   -mthumb -march=armv7-m -mfix-cortex-m3-ldrd -msoft-float
-LDFLAGS += -lc -lm -Llibopencm3/lib -lopencm3_stm32f1 -lnosys -T$(LDSCRIPT) \
-	   -nostartfiles -Wl,--gc-sections,-Map=sbv4.map -mcpu=cortex-m3 \
+LDFLAGS += -lc -lm -Llibopencm3/lib -lopencm3_stm32f1 -T$(LDSCRIPT) \
+	   -nostartfiles -lnosys -Wl,--gc-sections,-Map=sbv4.map -mcpu=cortex-m3 \
 	   -mthumb -march=armv7-m -mfix-cortex-m3-ldrd -msoft-float
 
 O_FILES = main.o
-TEST_O_FILES = test.o
+TEST_O_FILES = test.o led.o servo.o usart.o battery.o cdcacm.o
 
 all: sbv4.bin sbv4_test.bin
 
@@ -59,11 +59,11 @@ flash: sbv4_test.elf
 	        -c "reset" \
 	        -c "shutdown"
 
-debug: sbv4.elf
+debug: sbv4_test.elf
 	$(OOCD) -f "$(OOCD_BOARD)" \
 	        -c "init" \
-	      #  -c "reset halt" &
-	$(GDB)  sbv4.elf
+	        -c "reset halt" &
+	$(GDB)  $^ -ex "target remote localhost:3333" -ex "mon reset halt" && killall openocd
 
 clean:
 	-rm -f sbv4.elf depend *.o
