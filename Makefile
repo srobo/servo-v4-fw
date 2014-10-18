@@ -30,7 +30,7 @@ BASE_LDFLAGS += -lc -lm -Llibopencm3/lib \
 LDFLAGS = $(BASE_LDFLAGS) -T$(LDSCRIPT)
 
 BOOTLOADER_OBJS = dfu-bootloader/usb_dfu_blob.o dfu-bootloader/usbdfu.o
-O_FILES = main.o $(BOOTLOADER_OBJS)
+O_FILES = main.o led.o sbusb.o $(BOOTLOADER_OBJS)
 TEST_O_FILES = test.o led.o servo.o usart.o battery.o cdcacm.o $(BOOTLOADER_OBJS)
 
 all: force_bootloader.o bootloader $(O_FILES) sbv4.bin sbv4_test.bin sbv4_noboot.bin
@@ -55,7 +55,7 @@ sbv4_test.elf: $(TEST_O_FILES) $(LDSCRIPT)
 
 # Produce a no-bootloader binary, suitable for shunting straight into the app
 # segment of flash, by droping the first 8k of the flat image.
-sbv4_noboot.bin: sbv4_test.elf
+sbv4_noboot.bin: sbv4.elf
 	tmpfile=`mktemp /tmp/sr-sbv4-XXXXXXXX`; $(OBJCOPY) -O binary $< $$tmpfile; dd if=$$tmpfile of=$@ bs=4k skip=2; rm $$tmpfile
 
 depend: *.c
@@ -66,7 +66,7 @@ depend: *.c
 
 .PHONY: all test clean flash bootloader
 
-flash: sbv4_test.elf
+flash: sbv4.elf
 	$(OOCD) -f "$(OOCD_BOARD)" \
 	        -c "init" \
 	        -c "reset init" \
@@ -75,11 +75,12 @@ flash: sbv4_test.elf
 	        -c "reset" \
 	        -c "shutdown"
 
-debug: sbv4_test.elf
+debug: sbv4.elf
 	$(OOCD) -f "$(OOCD_BOARD)" \
 	        -c "init" \
 	        -c "reset halt" &
 	$(GDB)  $^ -ex "target remote localhost:3333" -ex "mon reset halt" && killall openocd
 
 clean:
+	$(MAKE) -C dfu-bootloader clean
 	-rm -f sbv4.elf depend *.o
