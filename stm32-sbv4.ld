@@ -44,7 +44,7 @@ SECTIONS
 	. = 0x2000;
 	} >rom
 	.text : {
-		main.o(.lolstartup) /* Startup record for bootloader */
+		*(.lolstartup) /* Startup record for bootloader */
 		. = ALIGN(0x200); /* Vector table must be 9-bit aligned */
 				  /* This is wasteful, but not fatal */
 		*(.vectors)	/* Vector table */

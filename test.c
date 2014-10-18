@@ -27,8 +27,8 @@ void init(void) {
 
 	led_init();
 	usart_init();
-	servo_init();
-	battery_init();
+//	servo_init();
+//	battery_init();
 }
 
 int main(void) {
@@ -44,6 +44,8 @@ int main(void) {
 			led_out(0);
 		}
 
+	}
+#if 0
 		// 5V5 SMPS + I2C + GPIO expander
 		servo_out(0x0000);
 		delay(DELAY);
@@ -69,6 +71,17 @@ int main(void) {
 		delay(DELAY);
 		led_clear(LED_STATUS_RED);
 	}
-
+#endif
 	return 0;
 }
+
+// Configure application start address, put in section that'll be placed at
+// the start of the non-bootloader firmware. The actual start address is
+// libopencm3's reset handler, seeing how that's what copies .data into sram.
+extern void *vector_table;
+extern __attribute__((naked)) void reset_handler(void);
+uint32_t app_start_address[2] __attribute__((section(".lolstartup"))) =
+{
+	(uint32_t)&vector_table,
+	(uint32_t)&reset_handler,
+};
