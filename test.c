@@ -7,7 +7,6 @@
 #include "led.h"
 #include "servo.h"
 #include "usart.h"
-#include "battery.h"
 
 #define DELAY 4000
 
@@ -25,7 +24,6 @@ void init(void) {
 	led_init();
 	usart_init();
 //	servo_init();
-//	battery_init();
 }
 
 int main(void) {
