@@ -8,15 +8,12 @@
 #include "servo.h"
 #include "usart.h"
 #include "battery.h"
-#include "cdcacm.h"
 
 #define DELAY 4000
 
 #define delay(x) do { for (int i = 0; i < x * 1000; i++) \
                           __asm__("nop"); \
                     } while(0)
-
-usbd_device *usbd_dev;
 
 void init(void) {
 	rcc_clock_setup_in_hse_8mhz_out_72mhz();
