@@ -4,6 +4,7 @@
 
 #include "usb.h"
 #include "led.h"
+#include "servo.h"
 
 #include "dfu-bootloader/usbdfu.h"
 
@@ -23,6 +24,7 @@ init()
 
 	usb_init();
 	led_init();
+	servo_init();
 }
 
 void
@@ -58,3 +60,14 @@ int main(void)
 
 	return 0;
 }
+
+// Configure application start address, put in section that'll be placed at
+// the start of the non-bootloader firmware. The actual start address is
+// libopencm3's reset handler, seeing how that's what copies .data into sram.
+extern void *vector_table;
+extern __attribute__((naked)) void reset_handler(void);
+uint32_t app_start_address[2] __attribute__((section(".lolstartup"))) =
+{
+	(uint32_t)&vector_table,
+	(uint32_t)&reset_handler,
+};

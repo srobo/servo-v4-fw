@@ -1,11 +1,33 @@
 #include "servo.h"
+#include "led.h"
 
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/i2c.h>
+#include <libopencm3/stm32/timer.h>
+#include <libopencm3/cm3/nvic.h>
+
+#define NUM_SERVOS 12
+#define POS_MAX 100
+#define POS_MIN 100
+
+#define START_DELAY 5
+#define CENTRE_DELAY 300
+
+static uint16_t servo_positions[NUM_SERVOS] = { 0 };
+
+typedef struct
+{
+	uint16_t pin_state;
+	uint16_t duration;
+} output_command_t;
+
+volatile static output_command_t output_commands[NUM_SERVOS*2] = { { 0, 50 } };
 
 static uint32_t reg32 __attribute__((unused));
 static uint32_t i2c = I2C1;
+
+static void setup_next_round(void);
 
 static void set_reg_pointer(uint8_t reg)
 {
@@ -73,7 +95,8 @@ static uint8_t read_reg(uint8_t reg)
 	return i2c_get_data(i2c);
 }
 
-void servo_init(void) {
+static void init_i2c(void)
+{
 	gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_50_MHZ,
 		      GPIO_CNF_OUTPUT_ALTFN_PUSHPULL, GPIO6);
 	gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_50_MHZ,
@@ -98,10 +121,140 @@ void servo_init(void) {
 	write_reg(0x01, 0x00);
 }
 
-void servo_out(uint16_t val)
+static inline void servo_out(uint16_t val)
 {
 	write_reg(0x14, val & 0xff);
 	write_reg(0x15, (val >> 8) & 0xff);
+}
+
+static void init_timer(void)
+{
+	rcc_periph_clock_enable(RCC_TIM1);
+	nvic_enable_irq(NVIC_TIM1_CC_IRQ);
+	nvic_set_priority(NVIC_TIM1_CC_IRQ, 1);
+
+	timer_reset(TIM1);
+
+	timer_set_mode(TIM1, TIM_CR1_CKD_CK_INT, TIM_CR1_CMS_EDGE, TIM_CR1_DIR_UP);
+	/* 200kHz */
+	timer_set_prescaler(TIM1, 60000);
+	timer_disable_preload(TIM1);
+	timer_continuous_mode(TIM1);
+	timer_set_period(TIM1, 50);
+
+	timer_set_oc_mode(TIM1, TIM_OC1, TIM_OCM_PWM1);
+	timer_enable_oc_preload(TIM1, TIM_OC1);
+	timer_set_oc_value(TIM1, TIM_OC1, 0);
+
+
+	timer_enable_irq(TIM1, TIM_DIER_CC1IE);
+}
+
+static void start_timer(void)
+{
+
+	timer_set_counter(TIM1, 0);
+	timer_enable_counter(TIM1);
+}
+
+void tim1_cc_isr(void)
+{
+	static uint8_t output_command_idx = 0;
+	timer_clear_flag(TIM1, TIM_SR_CC1IF);
+
+	timer_set_period(TIM1, output_commands[output_command_idx].duration);
+	servo_out(output_commands[output_command_idx].pin_state);
+
+	output_command_idx++;
+	if (output_command_idx == NUM_SERVOS*2)
+	{
+		output_command_idx = 0;
+		setup_next_round();
+	}
+}
+
+static void setup_next_round(void)
+{
+	/* Start all the pulses */
+	for ( int i = 0; i < NUM_SERVOS; i++ )
+	{
+		output_commands[i].duration = 5;
+		output_commands[i].pin_state = 5;
+	}
+}
+
+#if 0
+	typedef enum
+	{
+		PULSE_START,
+		PULSE_END
+	} pulse_state;
+
+	static pulse_state state = PULSE_START;
+	static uint8_t output_idx = 0;
+	static uint16_t next_delay = START_DELAY;
+
+	timer_set_period(TIM1, next_delay);
+
+	switch (state)
+	{
+		case PULSE_START:
+			if (output_idx == NUM_SERVOS)
+			{
+				state = PULSE_END;
+				output_idx = 0;
+				next_delay = ( CENTRE_DELAY + servo_positions[output_idx] ) - ( ( NUM_SERVOS-1 ) * START_DELAY );
+			}
+			else
+			{
+				// Turn on output_idx
+				led_toggle(LED_STATUS_RED);
+			}
+			break;
+		case PULSE_END:
+			if (output_idx == NUM_SERVOS)
+			{
+				state = PULSE_START;
+				output_idx = 0;
+				next_delay = 10; // Time between rounds
+			}
+			else
+			{
+				// Turn off output_idx
+				next_delay = ( CENTRE_DELAY + servo_positions[output_idx] );
+				led_toggle(LED_STATUS_BLUE);
+			}
+			break;
+	}
+
+	output_idx++;
+
+	if (output_idx == NUM_SERVOS)
+	{
+		if (state == PULSE_START) state = PULSE_END;
+		if (state == PULSE_END) state = PULSE_START;
+	}
+}
+
+#endif
+
+void servo_init(void)
+{
+	init_timer();
+	//init_i2c();
+
+	start_timer();
+}
+
+void servo_set_pos(uint8_t idx, int16_t pos)
+{
+	if (idx > (NUM_SERVOS - 1 ))
+		return;
+
+	if (pos > POS_MAX) pos = POS_MAX;
+	if (pos < POS_MIN) pos = POS_MIN;
+
+	servo_positions[idx] = pos;
 }
 
 uint8_t servo_read()

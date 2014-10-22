@@ -30,7 +30,7 @@ BASE_LDFLAGS += -lc -lm -Llibopencm3/lib \
 LDFLAGS = $(BASE_LDFLAGS) -T$(LDSCRIPT)
 
 BOOTLOADER_OBJS = dfu-bootloader/usb_dfu_blob.o dfu-bootloader/usbdfu.o
-O_FILES = main.o led.o sbusb.o $(BOOTLOADER_OBJS)
+O_FILES = main.o led.o sbusb.o servo.o $(BOOTLOADER_OBJS)
 TEST_O_FILES = test.o led.o servo.o usart.o $(BOOTLOADER_OBJS)
 
 all: force_bootloader.o bootloader $(O_FILES) sbv4.bin sbv4_test.bin sbv4_noboot.bin

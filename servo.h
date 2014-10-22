@@ -4,6 +4,6 @@
 
 void servo_init(void);
 
-void servo_out(uint16_t);
+void servo_set_pos(uint8_t idx, int16_t pos);
 
 uint8_t servo_read();
