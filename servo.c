@@ -6,6 +6,9 @@
 #include <libopencm3/stm32/i2c.h>
 #include <libopencm3/stm32/timer.h>
 #include <libopencm3/cm3/nvic.h>
+#include <libopencm3/stm32/dbgmcu.h>
+
+#include <stdlib.h>
 
 #define NUM_SERVOS 12
 #define POS_MAX 100
@@ -14,7 +17,15 @@
 #define START_DELAY 5
 #define CENTRE_DELAY 300
 
-static uint16_t servo_positions[NUM_SERVOS] = { 0 };
+static int16_t servo_positions[NUM_SERVOS] = { 0 };
+
+typedef struct
+{
+	uint8_t idx;
+	uint16_t pulse_length;
+} indexed_pulse_length_t;
+
+static indexed_pulse_length_t sorted_servo_pulse_lengths[NUM_SERVOS];
 
 typedef struct
 {
@@ -22,7 +33,7 @@ typedef struct
 	uint16_t duration;
 } output_command_t;
 
-volatile static output_command_t output_commands[NUM_SERVOS*2] = { { 0, 50 } };
+static volatile output_command_t output_commands[NUM_SERVOS*2] = { { 0, 50 } };
 
 static uint32_t reg32 __attribute__((unused));
 static uint32_t i2c = I2C1;
@@ -146,6 +157,9 @@ static void init_timer(void)
 	timer_enable_oc_preload(TIM1, TIM_OC1);
 	timer_set_oc_value(TIM1, TIM_OC1, 0);
 
+	/* Halt the ADC timer while debugging */
+	DBGMCU_CR |= DBGMCU_CR_TIM1_STOP;
+
 
 	timer_enable_irq(TIM1, TIM_DIER_CC1IE);
 }
@@ -159,7 +173,7 @@ static void start_timer(void)
 
 void tim1_cc_isr(void)
 {
-	led_toggle(LED_STATUS_RED);
+	led_set(LED_STATUS_RED);
 	static uint8_t output_command_idx = 0;
 	timer_clear_flag(TIM1, TIM_SR_CC1IF);
 
@@ -172,137 +186,79 @@ void tim1_cc_isr(void)
 		output_command_idx = 0;
 		setup_next_round();
 	}
+	led_clear(LED_STATUS_RED);
+}
+
+static uint16_t current_pin_state = 0x0000;
+static inline uint16_t set_output_state(bool highlow, uint8_t output_idx)
+{
+	if (output_idx < 4)
+	{
+		if (highlow)
+		{
+			current_pin_state |= ( 1 << output_idx );
+		}
+		else
+		{
+			current_pin_state &= ~( 1 << output_idx );
+		}
+	}
+	else
+	{
+		if (highlow)
+		{
+			current_pin_state |= ( 1 << (output_idx + 4) );
+		}
+		else
+		{
+			current_pin_state &= ~( 1 << (output_idx + 4) );
+		}
+	}
+	return current_pin_state;
+}
+
+static uint16_t servo_ticks(uint8_t servo_idx)
+{
+	return CENTRE_DELAY + servo_positions[servo_idx];
+}
+
+int compare_servo_pulse_lengths(const void *a, const void *b)
+{
+	const indexed_pulse_length_t *pla = (const indexed_pulse_length_t *) a;
+	const indexed_pulse_length_t *plb = (const indexed_pulse_length_t *) b;
+
+	return (pla->pulse_length > plb->pulse_length) - (pla->pulse_length < plb->pulse_length);
 }
 
 static void setup_next_round(void)
 {
-	output_commands[0].pin_state = 0x0001;
-	output_commands[0].duration = 5;
-
-	output_commands[1].pin_state = 0x0003;
-	output_commands[1].duration = 5;
-
-	output_commands[2].pin_state = 0x0007;
-	output_commands[2].duration = 5;
-
-	output_commands[3].pin_state = 0x000f;
-	output_commands[3].duration = 5;
-
-	output_commands[4].pin_state = 0x010f;
-	output_commands[4].duration = 5;
-
-	output_commands[5].pin_state = 0x030f;
-	output_commands[5].duration = 5;
-
-	output_commands[6].pin_state = 0x070f;
-	output_commands[6].duration = 5;
-
-	output_commands[7].pin_state = 0x0f0f;
-	output_commands[7].duration = 5;
-
-	output_commands[8].pin_state = 0x1f0f;
-	output_commands[8].duration = 5;
-
-	output_commands[9].pin_state = 0x3f0f;
-	output_commands[9].duration = 5;
-
-	output_commands[10].pin_state = 0x7f0f;
-	output_commands[10].duration = 5;
-
-	output_commands[11].pin_state = 0xff0f;
-	output_commands[11].duration = 245;
-
-	output_commands[12].pin_state = 0xff0e;
-	output_commands[12].duration = 5;
-
-	output_commands[13].pin_state = 0xff0c;
-	output_commands[13].duration = 5;
-
-	output_commands[14].pin_state = 0xff08;
-	output_commands[14].duration = 5;
-
-	output_commands[15].pin_state = 0xff00;
-	output_commands[15].duration = 5;
-
-	output_commands[16].pin_state = 0xfe00;
-	output_commands[16].duration = 5;
-
-	output_commands[17].pin_state = 0xfc00;
-	output_commands[17].duration = 5;
-
-	output_commands[18].pin_state = 0xf800;
-	output_commands[18].duration = 5;
-
-	output_commands[19].pin_state = 0xf000;
-	output_commands[19].duration = 5;
-
-	output_commands[20].pin_state = 0xe000;
-	output_commands[20].duration = 5;
-
-	output_commands[21].pin_state = 0xc000;
-	output_commands[21].duration = 5;
-
-	output_commands[22].pin_state = 0x8000;
-	output_commands[22].duration = 5;
-
-	output_commands[23].pin_state = 0x0000;
-	output_commands[23].duration = 3645;
-}
-
-#if 0
-	typedef enum
+	/* Copy current servo positions into 'sorted' array, ready for sorting */
+	for (int i=0; i < NUM_SERVOS; i++)
 	{
-		PULSE_START,
-		PULSE_END
-	} pulse_state;
-
-	static pulse_state state = PULSE_START;
-	static uint8_t output_idx = 0;
-	static uint16_t next_delay = START_DELAY;
-
-	timer_set_period(TIM1, next_delay);
-
-	switch (state)
-	{
-		case PULSE_START:
-			if (output_idx == NUM_SERVOS)
-			{
-				state = PULSE_END;
-				output_idx = 0;
-				next_delay = ( CENTRE_DELAY + servo_positions[output_idx] ) - ( ( NUM_SERVOS-1 ) * START_DELAY );
-			}
-			else
-			{
-				// Turn on output_idx
-				led_toggle(LED_STATUS_RED);
-			}
-			break;
-		case PULSE_END:
-			if (output_idx == NUM_SERVOS)
-			{
-				state = PULSE_START;
-				output_idx = 0;
-				next_delay = 10; // Time between rounds
-			}
-			else
-			{
-				// Turn off output_idx
-				next_delay = ( CENTRE_DELAY + servo_positions[output_idx] );
-				led_toggle(LED_STATUS_BLUE);
-			}
-			break;
+		sorted_servo_pulse_lengths[i].idx = i;
+		sorted_servo_pulse_lengths[i].pulse_length = servo_ticks(i);
 	}
 
-	output_idx++;
+	qsort(sorted_servo_pulse_lengths, NUM_SERVOS, sizeof(indexed_pulse_length_t), compare_servo_pulse_lengths);
 
-	if (output_idx == NUM_SERVOS)
+	for (int i=0; i < NUM_SERVOS-1; i++)
 	{
-		if (state == PULSE_START) state = PULSE_END;
-		if (state == PULSE_END) state = PULSE_START;
+		output_commands[i].pin_state = set_output_state(true, sorted_servo_pulse_lengths[i].idx);
+		output_commands[i].duration = START_DELAY;
 	}
-}
 
-#endif
+	output_commands[11].pin_state = set_output_state(true, sorted_servo_pulse_lengths[11].idx);
+	output_commands[11].duration = sorted_servo_pulse_lengths[0].pulse_length - (START_DELAY*(NUM_SERVOS-1));
+
+	for (int i=0; i < NUM_SERVOS-1; i++)
+	{
+		output_commands[NUM_SERVOS+i].pin_state = set_output_state(false, sorted_servo_pulse_lengths[i].idx);
+		output_commands[NUM_SERVOS+i].duration = ( sorted_servo_pulse_lengths[i+1].pulse_length - sorted_servo_pulse_lengths[i].pulse_length + START_DELAY);
+	}
+
+	output_commands[23].pin_state = set_output_state(false, sorted_servo_pulse_lengths[11].idx);
+	output_commands[23].duration = 3000;
+}
 
 void servo_init(void)
 {
@@ -310,6 +266,8 @@ void servo_init(void)
 	init_i2c();
 
 	start_timer();
+
+	servo_set_pos(7, 50);
 }
 
 void servo_set_pos(uint8_t idx, int16_t pos)
