@@ -270,6 +270,8 @@ void servo_init(void)
 	servo_set_pos(7, 50);
 }
 
+static const uint8_t actual_output_mapping[] = { 11, 10, 9, 8, 7, 6, 5, 4, 0, 1, 2, 3 };
+
 void servo_set_pos(uint8_t idx, int16_t pos)
 {
 	if (idx > (NUM_SERVOS - 1 ))
@@ -278,7 +280,7 @@ void servo_set_pos(uint8_t idx, int16_t pos)
 	if (pos > POS_MAX) pos = POS_MAX;
 	if (pos < POS_MIN) pos = POS_MIN;
 
-	servo_positions[idx] = pos;
+	servo_positions[actual_output_mapping[idx]] = pos;
 }
 
 uint8_t servo_read()
