@@ -12,12 +12,12 @@
 
 #define NUM_SERVOS 12
 #define POS_MAX 100
-#define POS_MIN 100
+#define POS_MIN -100
 
 #define START_DELAY 5
 #define CENTRE_DELAY 300
 
-static int16_t servo_positions[NUM_SERVOS] = { 0 };
+static volatile int16_t servo_positions[NUM_SERVOS] = { 0 };
 
 typedef struct
 {
@@ -266,8 +266,6 @@ void servo_init(void)
 	init_i2c();
 
 	start_timer();
-
-	servo_set_pos(7, 50);
 }
 
 static const uint8_t actual_output_mapping[] = { 11, 10, 9, 8, 7, 6, 5, 4, 0, 1, 2, 3 };

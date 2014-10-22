@@ -4,6 +4,7 @@
 #include <libopencm3/usb/dfu.h>
 
 #include "usb.h"
+#include "servo.h"
 
 #include "dfu-bootloader/usbdfu.h"
 
@@ -95,7 +96,17 @@ handle_read_req(struct usb_setup_data *req, int *len, uint8_t **buf)
 static int
 handle_write_req(struct usb_setup_data *req)
 {
-	return USBD_REQ_NOTSUPP; // Will result in a USB stall
+	if (req->wIndex < 12)
+	{
+		servo_set_pos(req->wIndex, (int16_t)req->wValue);
+	}
+	else
+	{
+		return USBD_REQ_NOTSUPP; // Will result in a USB stall
+	}
+
+	return USBD_REQ_HANDLED;
+
 }
 
 static int
