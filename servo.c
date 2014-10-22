@@ -137,7 +137,7 @@ static void init_timer(void)
 
 	timer_set_mode(TIM1, TIM_CR1_CKD_CK_INT, TIM_CR1_CMS_EDGE, TIM_CR1_DIR_UP);
 	/* 200kHz */
-	timer_set_prescaler(TIM1, 60000);
+	timer_set_prescaler(TIM1, 360);
 	timer_disable_preload(TIM1);
 	timer_continuous_mode(TIM1);
 	timer_set_period(TIM1, 50);
@@ -152,13 +152,14 @@ static void init_timer(void)
 
 static void start_timer(void)
 {
-
+	setup_next_round();
 	timer_set_counter(TIM1, 0);
 	timer_enable_counter(TIM1);
 }
 
 void tim1_cc_isr(void)
 {
+	led_toggle(LED_STATUS_RED);
 	static uint8_t output_command_idx = 0;
 	timer_clear_flag(TIM1, TIM_SR_CC1IF);
 
@@ -175,12 +176,77 @@ void tim1_cc_isr(void)
 
 static void setup_next_round(void)
 {
-	/* Start all the pulses */
-	for ( int i = 0; i < NUM_SERVOS; i++ )
-	{
-		output_commands[i].duration = 5;
-		output_commands[i].pin_state = 5;
-	}
+	output_commands[0].pin_state = 0x0001;
+	output_commands[0].duration = 5;
+
+	output_commands[1].pin_state = 0x0003;
+	output_commands[1].duration = 5;
+
+	output_commands[2].pin_state = 0x0007;
+	output_commands[2].duration = 5;
+
+	output_commands[3].pin_state = 0x000f;
+	output_commands[3].duration = 5;
+
+	output_commands[4].pin_state = 0x010f;
+	output_commands[4].duration = 5;
+
+	output_commands[5].pin_state = 0x030f;
+	output_commands[5].duration = 5;
+
+	output_commands[6].pin_state = 0x070f;
+	output_commands[6].duration = 5;
+
+	output_commands[7].pin_state = 0x0f0f;
+	output_commands[7].duration = 5;
+
+	output_commands[8].pin_state = 0x1f0f;
+	output_commands[8].duration = 5;
+
+	output_commands[9].pin_state = 0x3f0f;
+	output_commands[9].duration = 5;
+
+	output_commands[10].pin_state = 0x7f0f;
+	output_commands[10].duration = 5;
+
+	output_commands[11].pin_state = 0xff0f;
+	output_commands[11].duration = 245;
+
+	output_commands[12].pin_state = 0xff0e;
+	output_commands[12].duration = 5;
+
+	output_commands[13].pin_state = 0xff0c;
+	output_commands[13].duration = 5;
+
+	output_commands[14].pin_state = 0xff08;
+	output_commands[14].duration = 5;
+
+	output_commands[15].pin_state = 0xff00;
+	output_commands[15].duration = 5;
+
+	output_commands[16].pin_state = 0xfe00;
+	output_commands[16].duration = 5;
+
+	output_commands[17].pin_state = 0xfc00;
+	output_commands[17].duration = 5;
+
+	output_commands[18].pin_state = 0xf800;
+	output_commands[18].duration = 5;
+
+	output_commands[19].pin_state = 0xf000;
+	output_commands[19].duration = 5;
+
+	output_commands[20].pin_state = 0xe000;
+	output_commands[20].duration = 5;
+
+	output_commands[21].pin_state = 0xc000;
+	output_commands[21].duration = 5;
+
+	output_commands[22].pin_state = 0x8000;
+	output_commands[22].duration = 5;
+
+	output_commands[23].pin_state = 0x0000;
+	output_commands[23].duration = 3645;
 }
 
 #if 0
@@ -241,7 +307,7 @@ static void setup_next_round(void)
 void servo_init(void)
 {
 	init_timer();
-	//init_i2c();
+	init_i2c();
 
 	start_timer();
 }
