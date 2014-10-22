@@ -83,12 +83,29 @@ static const char *usb_strings[] = {
 
 static uint8_t usb_data_buffer[128];
 
+#define POWERBOARD_READ_FWVER		9
 static int
 handle_read_req(struct usb_setup_data *req, int *len, uint8_t **buf)
 {
 	int result = USBD_REQ_NOTSUPP; // Will result in a USB stall
 	uint16_t *u16ptr;
 	uint32_t *u32ptr;
+
+	switch (req->wIndex)
+	{
+		case POWERBOARD_READ_FWVER:
+			if (*len < 4)
+				break;
+
+			*len = 4;
+
+			u32ptr = (uint32_t*)*buf;
+			*u32ptr++ = FW_VER;
+			result = USBD_REQ_HANDLED;
+			break;
+		default:
+			break;
+	}
 
 	return result;
 }
