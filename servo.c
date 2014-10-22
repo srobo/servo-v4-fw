@@ -214,7 +214,9 @@ static inline uint16_t set_output_state(bool highlow, uint8_t output_idx)
 			current_pin_state &= ~( 1 << (output_idx + 4) );
 		}
 	}
-	return current_pin_state;
+
+	// Always enable link for now
+	return current_pin_state | 0x0040;
 }
 
 static uint16_t servo_ticks(uint8_t servo_idx)
