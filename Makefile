@@ -14,7 +14,7 @@ OOCD_BOARD = oocd/sbv4.cfg
 # Export these facts to bootloader
 SR_BOOTLOADER_VID=0x1BDA  # ECS VID
 SR_BOOTLOADER_PID=0x0011  # Servo board PID
-SR_BOOTLOADER_REV=0x0400  # BCD version, board 4.0.
+SR_BOOTLOADER_REV=0x0401  # BCD version, board 4.0.
 export SR_BOOTLOADER_VID SR_BOOTLOADER_PID SR_BOOTLOADER_REV
 
 CFLAGS += -mcpu=cortex-m3 -mthumb -msoft-float -DSTM32F1 \
