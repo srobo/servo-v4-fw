@@ -24,7 +24,10 @@ init()
 
 	usb_init();
 	led_init();
-	servo_init();
+	// Defer this until insturcted to do so over USB. Prevents the
+	// board from hanging if the other side of the isolation barrier
+	// is unpowered.
+	//servo_init();
 }
 
 void

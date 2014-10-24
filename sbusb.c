@@ -117,6 +117,10 @@ handle_write_req(struct usb_setup_data *req)
 	{
 		servo_set_pos(req->wIndex, (int16_t)req->wValue);
 	}
+	else if (req->wIndex == 12)
+	{
+		servo_init();
+	}
 	else
 	{
 		return USBD_REQ_NOTSUPP; // Will result in a USB stall
