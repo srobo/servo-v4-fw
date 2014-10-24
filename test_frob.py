@@ -70,6 +70,9 @@ if handle == None:
     print >>sys.stderr, "Could not open servo board"
     sys.exit(1)
 
+# Always command the board to init the servo stuff
+handle.controlWrite(0, 64, 0, 12)
+
 if is_read:
     ret = handle.controlRead(0x80, 64, 0, req_id, 8)
     if len(ret) == 4:
