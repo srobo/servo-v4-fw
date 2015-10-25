@@ -15,7 +15,8 @@ OOCD_BOARD = oocd/sbv4.cfg
 SR_BOOTLOADER_VID=0x1BDA  # ECS VID
 SR_BOOTLOADER_PID=0x0011  # Servo board PID
 SR_BOOTLOADER_REV=0x0402  # BCD version, board 4.0.
-export SR_BOOTLOADER_VID SR_BOOTLOADER_PID SR_BOOTLOADER_REV
+SR_BOOTLOADER_FLASHSIZE=0x8000  # 32kb of onboard flash.
+export SR_BOOTLOADER_VID SR_BOOTLOADER_PID SR_BOOTLOADER_REV SR_BOOTLOADER_FLASHSIZE
 
 CFLAGS += -mcpu=cortex-m3 -mthumb -msoft-float -DSTM32F1 \
 	  -Wall -Wextra -Os -std=gnu99 -g -fno-common \
@@ -57,6 +58,7 @@ sbv4_test.elf: $(TEST_O_FILES) $(LDSCRIPT)
 # segment of flash, by droping the first 8k of the flat image.
 sbv4_noboot.bin: sbv4.elf
 	tmpfile=`mktemp /tmp/sr-sbv4-XXXXXXXX`; $(OBJCOPY) -O binary $< $$tmpfile; dd if=$$tmpfile of=$@ bs=4k skip=2; rm $$tmpfile
+	dfu-bootloader/crctool -w $@
 
 depend: *.c
 	rm -f depend
