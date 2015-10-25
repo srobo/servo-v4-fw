@@ -42,8 +42,7 @@ jump_to_bootloader()
 	usb_deinit();
 	// Disable any irqs that there are. XXX this is likely
 	// to get out of sync.
-	nvic_disable_irq(NVIC_ADC1_2_IRQ);
-	nvic_disable_irq(NVIC_TIM2_IRQ);
+	nvic_disable_irq(NVIC_TIM1_CC_IRQ);
 	// Call back into bootloader
 	(*(void (**)())(REENTER_BOOTLOADER_RENDEZVOUS))();
 }
