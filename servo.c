@@ -14,7 +14,8 @@
 #define POS_MAX 100
 #define POS_MIN -100
 
-#define START_DELAY 5
+// Cannot be less than 10 due to the time it takes to talk to the GPIO thing
+#define START_DELAY 15
 #define CENTRE_DELAY 300
 
 static volatile int16_t servo_positions[NUM_SERVOS] = { 0 };
@@ -177,7 +178,8 @@ void tim1_cc_isr(void)
 	static uint8_t output_command_idx = 0;
 	timer_clear_flag(TIM1, TIM_SR_CC1IF);
 
-	timer_set_period(TIM1, output_commands[output_command_idx].duration);
+	// The timer count from 0 to N, inclusive, so we want to count up to N-1 to get N cycles
+	timer_set_period(TIM1, output_commands[output_command_idx].duration - 1);
 	servo_out(output_commands[output_command_idx].pin_state);
 
 	output_command_idx++;
