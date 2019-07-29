@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+
 import sys
 import struct
 import argparse
@@ -43,14 +45,14 @@ elif args.reqtype == "write":
     req_map = write_ids
     is_read = False
     if len(sys.argv) != 4:
-        print >>sys.stderr, "You need to pass an argument to write"
+        print("You need to pass an argument to write", file=sys.stderr)
         sys.exit(1)
 else:
-    print >>sys.stderr, "Unrecognized request type"
+    print("Unrecognized request type", file=sys.stderr)
     sys.exit(1)
 
 if args.reqname not in req_map:
-    print >>sys.stderr, "\"{0}\" is not a valid request for {1}".format(args.reqname, args.reqtype)
+    print("\"{0}\" is not a valid request for {1}".format(args.reqname, args.reqtype), file=sys.stderr)
     sys.exit(1)
 
 req_id = req_map[args.reqname]
@@ -61,13 +63,13 @@ ctx = USBContext()
 dev = ctx.getByVendorIDAndProductID(0x1bda, 0x11)
 
 if dev == None:
-    print >>sys.stderr, "Could not find servo board attached"
+    print("Could not find servo board attached", file=sys.stderr)
     sys.exit(1)
 
 handle = dev.open()
 
 if handle == None:
-    print >>sys.stderr, "Could not open servo board"
+    print("Could not open servo board", file=sys.stderr)
     sys.exit(1)
 
 # Always command the board to init the servo stuff
@@ -77,12 +79,12 @@ if is_read:
     ret = handle.controlRead(0x80, 64, 0, req_id, 8)
     if len(ret) == 4:
         a, = struct.unpack("i", ret)
-        print "{0}".format(a)
+        print("{0}".format(a))
     elif len(ret) == 8:
         a, b = struct.unpack("ii", ret)
-        print "{0} {1}".format(a, b)
+        print("{0} {1}".format(a, b))
     else:
-        print >>sys.stderr, "Short read (or otherwise), board returned {0} bytes".format(len(ret))
+        print("Short read (or otherwise), board returned {0} bytes".format(len(ret)), file=sys.stderr)
         sys.exit(1)
 else:
     handle.controlWrite(0, 64, args.argument, req_id, "")
