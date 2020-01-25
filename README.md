@@ -56,5 +56,5 @@ Designs
 
 You can access the schematics and source code of the hardware in the following places.
 -   [Full Schematics](https://www.studentrobotics.org/resources/kit/servo-schematic.pdf)
--   [Student Facing Docs](https://studentrobotics.org/docs/kit/servo_board)
+-   [Competitor Facing Docs](https://www.studentrobotics.org/docs/kit/servo_board)
 -   [Hardware designs](https://github.com/srobo/servo-v4-hw)
