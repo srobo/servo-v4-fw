@@ -54,7 +54,11 @@ sbv4_test.elf: $(TEST_O_FILES) $(LDSCRIPT)
 	$(LD) -o $@ $(TEST_O_FILES) $(LDFLAGS) -lopencm3_stm32f1
 	$(SIZE) $@
 
-%.bin: %.elf
+sbv4.bin: sbv4.elf
+	$(OBJCOPY) -O binary $< $@
+	dfu-bootloader/crctool -S 8192 -w $@  # Ignore the first 8192 bytes (the bootloader blob).
+
+sbv4_test.bin: sbv4_test.elf
 	$(OBJCOPY) -O binary $< $@
 
 # Produce a no-bootloader binary, suitable for shunting straight into the app
