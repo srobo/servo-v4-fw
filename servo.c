@@ -40,11 +40,22 @@ static uint32_t reg32 __attribute__((unused));
 static uint32_t i2c = I2C1;
 
 static void setup_next_round(void);
+static void stop_timer(void);
+
+#define WAIT_FOR(CONDITION) do { \
+	uint32_t timeout = 5000; /* a few ms */ \
+	while (!((CONDITION) || timeout == 0)) { timeout--; } \
+	if (!timeout) { \
+		/* Timeout; typically means that the slave is unresponsive, */ \
+	        /* probably because 12V power has been lost */ \
+		stop_timer(); \
+	} \
+} while (0)
 
 static void set_reg_pointer(uint8_t reg)
 {
 	// EV5
-	while (!((I2C_SR1(i2c) & I2C_SR1_SB)
+	WAIT_FOR(((I2C_SR1(i2c) & I2C_SR1_SB)
 	        & (I2C_SR2(i2c) & (I2C_SR2_MSL | I2C_SR2_BUSY))));
 
 	i2c_send_7bit_address(i2c, 0x21, I2C_WRITE);
@@ -52,7 +63,7 @@ static void set_reg_pointer(uint8_t reg)
 
 
 	// EV6
-	while (!(I2C_SR1(i2c) & I2C_SR1_ADDR));
+	WAIT_FOR((I2C_SR1(i2c) & I2C_SR1_ADDR));
 	reg32 = I2C_SR2(i2c);
 	// /EV6
 
@@ -61,7 +72,7 @@ static void set_reg_pointer(uint8_t reg)
 	// /EV8_1
 	
 	// EV8_2
-	while (!(I2C_SR1(i2c) & ( I2C_SR1_BTF | I2C_SR1_TxE )));
+	WAIT_FOR((I2C_SR1(i2c) & ( I2C_SR1_BTF | I2C_SR1_TxE )));
 	// /EV8_2
 }
 
@@ -72,7 +83,7 @@ static void write_reg(uint8_t reg, uint8_t val)
 
 	i2c_send_data(i2c, val);
 
-	while (!(I2C_SR1(i2c) & ( I2C_SR1_BTF | I2C_SR1_TxE )));
+	WAIT_FOR((I2C_SR1(i2c) & ( I2C_SR1_BTF | I2C_SR1_TxE )));
 
 	i2c_send_stop(i2c);
 }
@@ -85,14 +96,14 @@ static uint8_t read_reg(uint8_t reg)
 	i2c_send_start(i2c);
 	
 	// EV5
-	while (!((I2C_SR1(i2c) & I2C_SR1_SB)
+	WAIT_FOR(((I2C_SR1(i2c) & I2C_SR1_SB)
 	        & (I2C_SR2(i2c) & (I2C_SR2_MSL | I2C_SR2_BUSY))));
 
 	i2c_send_7bit_address(i2c, 0x21, I2C_READ);
 	// /EV5
 
 	// EV6_3
-	while (!(I2C_SR1(i2c) & I2C_SR1_ADDR));
+	WAIT_FOR((I2C_SR1(i2c) & I2C_SR1_ADDR));
 	// Clear ACK
 	I2C_CR1(i2c) &= ~I2C_CR1_ACK;
 	reg32 = I2C_SR2(i2c);
@@ -101,7 +112,7 @@ static uint8_t read_reg(uint8_t reg)
 	// /EV6_3
 	
 	// EV7
-	while (!(I2C_SR1(i2c) & I2C_SR1_RxNE));
+	WAIT_FOR((I2C_SR1(i2c) & I2C_SR1_RxNE));
 	// /EV7
 
 	return i2c_get_data(i2c);
@@ -170,6 +181,11 @@ static void start_timer(void)
 	setup_next_round();
 	timer_set_counter(TIM1, 0);
 	timer_enable_counter(TIM1);
+}
+
+static void stop_timer(void)
+{
+        timer_disable_counter(TIM1);
 }
 
 void tim1_cc_isr(void)
