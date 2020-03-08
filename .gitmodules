@@ -3,4 +3,4 @@
 	url = git://github.com/libopencm3/libopencm3.git
 [submodule "dfu-bootloader"]
 	path = dfu-bootloader
-	url = git://git.srobo.org/boards/dfu-bootloader
+	url = ../dfu-bootloader
