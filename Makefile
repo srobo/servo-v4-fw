@@ -8,6 +8,9 @@ GDB = $(PREFIX)-gdb
 OBJCOPY = $(PREFIX)-objcopy
 OOCD = openocd
 
+# Directory containing include/ and lib/ subdirectories of libopencm3 installation.
+LIBOPENCM3 ?= libopencm3
+
 LDSCRIPT = stm32-sbv4.ld
 OOCD_BOARD = oocd/sbv4.cfg
 
@@ -20,12 +23,12 @@ export SR_BOOTLOADER_VID SR_BOOTLOADER_PID SR_BOOTLOADER_REV SR_BOOTLOADER_FLASH
 
 CFLAGS += -mcpu=cortex-m3 -mthumb -msoft-float -DSTM32F1 \
 	  -Wall -Wextra -Os -std=gnu99 -g -fno-common \
-	  -Ilibopencm3/include -DFW_VER=$(FW_VER) -g \
+	  -I$(LIBOPENCM3)/include -DFW_VER=$(FW_VER) -g \
 	  -DSR_DEV_VID=$(SR_BOOTLOADER_VID) \
 	  -DSR_DEV_PID=$(SR_BOOTLOADER_PID) \
 	  -DSR_DEV_REV=$(SR_BOOTLOADER_REV)
-BASE_LDFLAGS += -lc -lm -Llibopencm3/lib \
-	   -Llibopencm3/lib/stm32/f1 -lnosys \
+BASE_LDFLAGS += -lc -lm -L$(LIBOPENCM3)/lib \
+	   -L$(LIBOPENCM3)/lib/stm32/f1 -lnosys \
 	   -nostartfiles -Wl,--gc-sections,-Map=sbv4.map -mcpu=cortex-m3 \
 	   -mthumb -march=armv7-m -mfix-cortex-m3-ldrd -msoft-float
 LDFLAGS = $(BASE_LDFLAGS) -T$(LDSCRIPT)
