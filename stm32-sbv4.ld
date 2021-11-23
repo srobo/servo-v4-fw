@@ -115,11 +115,6 @@ SECTIONS
 	/DISCARD/ : { *(.eh_frame) }
 
 	. = ALIGN(4);
-
-	 .text : {
-		FILL(0)
-		. = (0x8000 - _edata + _data);
-	} >rom
 	end = .;
 }
 
