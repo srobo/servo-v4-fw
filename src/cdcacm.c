@@ -253,3 +253,15 @@ int main(void)
 	while (1)
 		usbd_poll(usbd_dev);
 }
+
+// Configure application start address, put in section that'll be placed at
+// the start of the non-bootloader firmware. The actual start address is
+// libopencm3's reset handler, this copies .data into sram.
+extern void *vector_table;
+extern __attribute__((naked)) void reset_handler(void);
+uint32_t app_start_address[3] __attribute__((section(".startup"))) =
+{
+	(uint32_t)&vector_table,
+	(uint32_t)&reset_handler,
+	(uint32_t)0x00000000,  // CRC checksum of the compiled binary
+};

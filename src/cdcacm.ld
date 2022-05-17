@@ -28,16 +28,21 @@ MEMORY
 	ram (rwx) : ORIGIN = 0x20000000, LENGTH = 20K
 }
 
-/* Enforce emmition of the vector table. */
+/* Force linking of application main function */
+EXTERN(app_start_address);
+
+/* Enforce emission of the vector table. */
 EXTERN (vector_table)
 
 /* Define the entry point of the output file. */
-ENTRY(reset_handler)
+/* ENTRY(reset_handler) */
 
 /* Define sections. */
 SECTIONS
 {
 	.text : {
+		*(.startup)
+		. = ALIGN(0x200); /* Vector table needs to be 9-bit aligned */
 		*(.vectors)	/* Vector table */
 		*(.text*)	/* Program code */
 		. = ALIGN(4);
