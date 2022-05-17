@@ -83,7 +83,7 @@ static const struct {
 		.bcdCDC = 0x0110,
 	},
 	.call_mgmt = {
-		.bFunctionLength = 
+		.bFunctionLength =
 			sizeof(struct usb_cdc_call_management_descriptor),
 		.bDescriptorType = CS_INTERFACE,
 		.bDescriptorSubtype = USB_CDC_TYPE_CALL_MANAGEMENT,
@@ -101,7 +101,7 @@ static const struct {
 		.bDescriptorType = CS_INTERFACE,
 		.bDescriptorSubtype = USB_CDC_TYPE_UNION,
 		.bControlInterface = 0,
-		.bSubordinateInterface0 = 1, 
+		.bSubordinateInterface0 = 1,
 	 }
 };
 
@@ -194,7 +194,7 @@ static enum usbd_request_return_codes cdcacm_control_request(usbd_device *usbd_d
 		// usbd_ep_write_packet(0x83, buf, 10);
 		return USBD_REQ_HANDLED;
 		}
-	case USB_CDC_REQ_SET_LINE_CODING: 
+	case USB_CDC_REQ_SET_LINE_CODING:
 		if(*len < sizeof(struct usb_cdc_line_coding))
 			return USBD_REQ_NOTSUPP;
 

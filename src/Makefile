@@ -3,7 +3,6 @@
 ##
 ## Copyright (C) 2009 Uwe Hermann <uwe@hermann-uwe.de>
 ## Copyright (C) 2010 Piotr Esden-Tempski <piotr@esden.net>
-## Copyright (C) 2013 Frantisek Burian <BuFran@seznam.cz>
 ##
 ## This library is free software: you can redistribute it and/or modify
 ## it under the terms of the GNU Lesser General Public License as published by
@@ -18,6 +17,30 @@
 ## You should have received a copy of the GNU Lesser General Public License
 ## along with this library.  If not, see <http://www.gnu.org/licenses/>.
 ##
+
+BINARY = cdcacm
+
+LIBNAME		= opencm3_stm32f1
+DEFS		+= -DSTM32F1
+
+FP_FLAGS	?= -msoft-float
+ARCH_FLAGS	= -mthumb -mcpu=cortex-m3 $(FP_FLAGS) -mfix-cortex-m3-ldrd
+
+################################################################################
+# OpenOCD specific variables
+
+OOCD		?= openocd
+OOCD_INTERFACE	?= flossjtag
+OOCD_TARGET	?= stm32f1x
+
+################################################################################
+# Black Magic Probe specific variables
+# Set the BMP_PORT to a serial port and then BMP is used for flashing
+BMP_PORT	?=
+
+################################################################################
+# texane/stlink specific variables
+#STLINK_PORT	?= :4242
 
 # Be silent per default, but 'make V=1' will show all compiler calls.
 ifneq ($(V),1)
@@ -57,7 +80,7 @@ ifeq ($(strip $(OPENCM3_DIR)),)
 # user has not specified the library path, so we try to detect it
 
 # where we search for the library
-LIBPATHS := ./libopencm3 ../../../../libopencm3 ../../../../../libopencm3
+LIBPATHS := ./libopencm3 ../libopencm3
 
 OPENCM3_DIR := $(wildcard $(LIBPATHS:=/locm3.sublime-project))
 OPENCM3_DIR := $(firstword $(dir $(OPENCM3_DIR)))
