@@ -208,7 +208,10 @@ print-%:
 
 %.bin: %.elf
 	@#printf "  OBJCOPY $(*).bin\n"
-	$(Q)$(OBJCOPY) -Obinary $(*).elf $(*).bin
+# pad binary out to full size of flash
+	$(Q)$(OBJCOPY) -Obinary --pad-to 0x08008000 $(*).elf $(*).bin
+# compute CRC32 of binary and inject into third word of bin
+	$(Q)./crctool.py -w $(*).bin
 
 %.hex: %.elf
 	@#printf "  OBJCOPY $(*).hex\n"
