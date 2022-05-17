@@ -234,21 +234,27 @@ int main(void)
 {
 	usbd_device *usbd_dev;
 
-	rcc_clock_setup_pll(&rcc_hsi_configs[RCC_CLOCK_HSI_48MHZ]);
+	rcc_clock_setup_pll(&rcc_hse_configs[RCC_CLOCK_HSE8_72MHZ]);
 
 	rcc_periph_clock_enable(RCC_GPIOA);
+	rcc_periph_clock_enable(RCC_GPIOB);
 	rcc_periph_clock_enable(RCC_AFIO);
 
 	AFIO_MAPR |= AFIO_MAPR_SWJ_CFG_JTAG_OFF_SW_ON;
 
-	gpio_set_mode(GPIOA, GPIO_MODE_INPUT, 0, GPIO15);
+	gpio_set_mode(GPIOA, GPIO_MODE_INPUT, 0, GPIO8);
 
 	usbd_dev = usbd_init(&st_usbfs_v1_usb_driver, &dev, &config, usb_strings, 3, usbd_control_buffer, sizeof(usbd_control_buffer));
 	usbd_register_set_config_callback(usbd_dev, cdcacm_set_config);
 
-	gpio_set(GPIOA, GPIO15);
+	gpio_set(GPIOA, GPIO8);  // enable ext USB enable
 	gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_2_MHZ,
-		      GPIO_CNF_OUTPUT_PUSHPULL, GPIO15);
+		      GPIO_CNF_OUTPUT_PUSHPULL, GPIO8);
+
+	// enable status LED
+	gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_10_MHZ,
+			  GPIO_CNF_OUTPUT_PUSHPULL, GPIO11);
+	gpio_clear(GPIOB, GPIO11);
 
 	while (1)
 		usbd_poll(usbd_dev);
