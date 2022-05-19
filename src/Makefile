@@ -20,7 +20,7 @@
 
 BINARY = cdcacm
 
-all: elf
+all: bin
 
 include rules.mk
 

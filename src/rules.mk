@@ -94,7 +94,7 @@ ifeq ($(strip $(DEVICE)),)
 DEFS		+= -I$(OPENCM3_DIR)/include
 LDFLAGS		+= -L$(OPENCM3_DIR)/lib
 LDLIBS		+= -l$(LIBNAME)
-LDSCRIPT	?= $(BINARY).ld
+LDSCRIPT	?= $(OPENCM3_DIR)/../utils/$(BINARY).ld
 else
 # New style, assume device is provided, and we're generating the rest.
 ifneq ($(strip $(LDSCRIPT)),)
@@ -179,7 +179,7 @@ endif
 # pad binary out to full size of flash
 	$(Q)$(OBJCOPY) -Obinary --pad-to 0x08008000 $(*).elf $(*).bin
 # compute CRC32 of binary and inject into third word of bin
-	$(Q)./crctool.py -w $(*).bin
+	$(Q)$(SCRIPT_DIR)/crctool.py -w $(*).bin
 
 %.hex: %.elf
 	@#printf "  OBJCOPY $(*).hex\n"
