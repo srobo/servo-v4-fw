@@ -43,7 +43,7 @@ DEFS = -DFW_VER=$(FW_VER) \
 
 all: bin
 
-include rules.mk
+include ../utils/rules.mk
 
 elf: $(BINARY).elf
 bin: $(BINARY).bin
