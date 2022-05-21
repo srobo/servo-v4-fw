@@ -18,7 +18,10 @@
 ## along with this library.  If not, see <http://www.gnu.org/licenses/>.
 ##
 
-BINARY = cdcacm
+BINARY = main
+OBJS = cdcacm.o
+
+LDSCRIPT = $(OPENCM3_DIR)/../utils/stm32-sbv4.ld
 
 all: bin
 
