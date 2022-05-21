@@ -4,7 +4,10 @@
 
 #include "cdcacm.h"
 
+#define REENTER_BOOTLOADER_RENDEZVOUS	0x08001FFC
+
 void init(void);
+void jump_to_bootloader(void);
 
 int main(void)
 {
@@ -15,8 +18,12 @@ int main(void)
               GPIO_CNF_OUTPUT_PUSHPULL, GPIO11);
     gpio_clear(GPIOB, GPIO11);
 
-    while (1)
+    while (1) {
         usb_poll();
+        if (re_enter_bootloader) {
+            jump_to_bootloader();
+        }
+    }
 }
 
 void init(void)
@@ -30,6 +37,17 @@ void init(void)
     AFIO_MAPR |= AFIO_MAPR_SWJ_CFG_JTAG_OFF_SW_ON;
 
     usb_init();
+}
+
+void jump_to_bootloader(void)
+{
+    // Actually wait for the usb peripheral to complete
+    // it's acknowledgement to dfu_detach
+    delay(20);
+    // Now reset USB
+    usb_deinit();
+    // Call back into bootloader
+    (*(void (**)())(REENTER_BOOTLOADER_RENDEZVOUS))();
 }
 
 // Configure application start address, put in section that'll be placed at
