@@ -51,6 +51,7 @@ OBJCOPY		:= $(PREFIX)objcopy
 OBJDUMP		:= $(PREFIX)objdump
 GDB		:= $(PREFIX)gdb
 STFLASH		= $(shell which st-flash)
+DFU_UTIL	= $(shell which dfu-util)
 STYLECHECK	:= /checkpatch.pl
 STYLECHECKFLAGS	:= --no-tree -f --terse --mailback
 STYLECHECKFILES	:= $(shell find . -name '*.[ch]')
@@ -171,6 +172,14 @@ ifeq (,$(wildcard $@))
 	$(MAKE) -C $(OPENCM3_DIR)
 endif
 
+# Default USB PID:VID
+ifeq ($(VID),)
+ifeq ($(PID),)
+VID	:=	1bda
+PID	:=	0011
+endif
+endif
+
 %.images: %.bin %.hex %.srec %.list %.map
 	@#printf "*** $* images generated ***\n"
 
@@ -252,3 +261,7 @@ else
 		   -x $(SCRIPT_DIR)/black_magic_probe_flash.scr \
 		   $(*).elf
 endif
+
+%.dfu:	%.bin
+	@printf "  DFU   $(*).bin\n"
+	$(Q)$(DFU_UTIL) -d $(VID):$(PID) -D $(*).bin

@@ -33,6 +33,7 @@ GENERATED_BINARIES=$(BINARY).elf $(BINARY).bin $(BINARY).hex $(BINARY).srec $(BI
 
 images: $(BINARY).images
 flash: $(BINARY).flash
+dfu: $(BINARY).dfu
 
 # Define a helper macro for debugging make errors online
 # you can type "make print-OPENCM3_DIR" and it will show you
