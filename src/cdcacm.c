@@ -26,6 +26,8 @@
 
 #include "cdcacm.h"
 
+#define SERIALNUM_BOOTLOADER_LOC	0x08001FE0
+
 static usbd_device *g_usbd_dev;
 bool re_enter_bootloader = false;
 
@@ -37,9 +39,9 @@ static const struct usb_device_descriptor dev = {
     .bDeviceSubClass = 0,
     .bDeviceProtocol = 0,
     .bMaxPacketSize0 = 64,
-    .idVendor = 0x0483,
-    .idProduct = 0x5740,
-    .bcdDevice = 0x0200,
+    .idVendor = SR_DEV_VID,
+    .idProduct = SR_DEV_PID,
+    .bcdDevice = SR_DEV_REV,
     .iManufacturer = 1,
     .iProduct = 2,
     .iSerialNumber = 3,
@@ -129,7 +131,7 @@ static const struct usb_interface_descriptor comm_iface[] = {{
     .bInterfaceClass = USB_CLASS_CDC,
     .bInterfaceSubClass = USB_CDC_SUBCLASS_ACM,
     .bInterfaceProtocol = USB_CDC_PROTOCOL_AT,
-    .iInterface = 0,
+    .iInterface = 4,
 
     .endpoint = comm_endp,
 
@@ -146,7 +148,7 @@ static const struct usb_interface_descriptor data_iface[] = {{
     .bInterfaceClass = USB_CLASS_DATA,
     .bInterfaceSubClass = 0,
     .bInterfaceProtocol = 0,
-    .iInterface = 0,
+    .iInterface = 4,
 
     .endpoint = data_endp,
 }};
@@ -160,7 +162,7 @@ const struct usb_interface_descriptor dfu_iface[] = {{
     .bInterfaceClass = USB_CLASS_DFU,
     .bInterfaceSubClass = 0x01, // DFU
     .bInterfaceProtocol = 0x01, // Protocol 1.0
-    .iInterface = 4,
+    .iInterface = 5,
 	.extra = &sr_dfu_function,
 	.extralen = sizeof(sr_dfu_function),
 }};
@@ -190,10 +192,11 @@ static const struct usb_config_descriptor config = {
 };
 
 static const char *usb_strings[] = {
-    "Black Sphere Technologies",
-    "CDC-ACM Demo",
-    "DEMO",
-    "DEMO DFU",
+    "Student Robotics",
+    "Servo Board v4",
+    (const char *)SERIALNUM_BOOTLOADER_LOC,
+	"Student Robotics Servo Board v4", // Iface 1
+	"Student Robotics Servo Board DFU loader", // IFace 2, DFU
 };
 
 /* Buffer to be used for control requests. */
@@ -282,7 +285,7 @@ void usb_init(void)
     gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_2_MHZ,
               GPIO_CNF_OUTPUT_PUSHPULL, GPIO8);
 
-    g_usbd_dev = usbd_init(&st_usbfs_v1_usb_driver, &dev, &config, usb_strings, 4, usbd_control_buffer, sizeof(usbd_control_buffer));
+    g_usbd_dev = usbd_init(&st_usbfs_v1_usb_driver, &dev, &config, usb_strings, 5, usbd_control_buffer, sizeof(usbd_control_buffer));
     usbd_register_set_config_callback(g_usbd_dev, cdcacm_set_config);
 
     gpio_set(GPIOA, GPIO8);  // enable ext USB enable

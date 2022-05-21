@@ -17,11 +17,29 @@
 ## You should have received a copy of the GNU Lesser General Public License
 ## along with this library.  If not, see <http://www.gnu.org/licenses/>.
 ##
+FW_VER ?= 3.0
 
 BINARY = main
 OBJS = cdcacm.o
 
 LDSCRIPT = $(OPENCM3_DIR)/../utils/stm32-sbv4.ld
+
+# Default USB PID:VID
+ifeq ($(VID),)
+ifeq ($(PID),)
+VID	:=	1bda
+PID	:=	0011
+endif
+endif
+
+PYTHON ?= $(shell which python3)
+# Convert FW_VER to BCD
+FW_REV = $(shell echo $(FW_VER) | $(PYTHON) -c 'print("".join(f"{int(x):02x}" for x in input().split(".")))')
+
+DEFS = -DFW_VER=$(FW_VER) \
+	  -DSR_DEV_VID=0x$(VID) \
+	  -DSR_DEV_PID=0x$(PID) \
+	  -DSR_DEV_REV=0x$(FW_REV)
 
 all: bin
 
