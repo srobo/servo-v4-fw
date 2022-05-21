@@ -18,6 +18,7 @@
  */
 
 #include <stdlib.h>
+#include <string.h>
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/usb/usbd.h>
@@ -25,6 +26,7 @@
 #include <libopencm3/usb/dfu.h>
 
 #include "cdcacm.h"
+#include "msg_handler.h"
 
 #define SERIALNUM_BOOTLOADER_LOC	0x08001FE0
 
@@ -251,15 +253,57 @@ static enum usbd_request_return_codes cdcacm_control_request(usbd_device *usbd_d
     return USBD_REQ_NOTSUPP;
 }
 
+#define USB_MSG_MAXLEN 64
+char usb_msg_buffer[USB_MSG_MAXLEN];
+int usb_msg_len = 0;
+
 static void cdcacm_data_rx_cb(usbd_device *usbd_dev, uint8_t ep)
 {
     (void)ep;
 
-    char buf[64];
-    int len = usbd_ep_read_packet(usbd_dev, 0x01, buf, 64);
+    int remaining_len = (USB_MSG_MAXLEN - 1) - usb_msg_len;
+    char* new_data_ptr = usb_msg_buffer + usb_msg_len;
+
+    int len = usbd_ep_read_packet(usbd_dev, 0x01, new_data_ptr, remaining_len);
 
     if (len) {
-        usbd_ep_write_packet(usbd_dev, 0x82, buf, len);
+        usb_msg_len += len;
+        usb_msg_buffer[usb_msg_len] = '\0'; // add null terminator to make it a string
+
+        char* end_of_msg = strchr(usb_msg_buffer, '\n'); // test if \n in buffer
+        char response_buffer[64];
+        char* response_ptr = response_buffer;
+        int full_response_len = 0;
+
+        while (end_of_msg != NULL) {
+            *end_of_msg = '\0'; // replace newline with null terminator
+            int msg_len = end_of_msg - usb_msg_buffer + 1;
+
+            int usb_response_len = parse_msg(usb_msg_buffer, msg_len, response_ptr, 64 - full_response_len);
+            full_response_len += usb_response_len;
+            response_ptr += usb_response_len;
+
+            usb_msg_len -= msg_len;
+            if (usb_msg_len < 0){
+                usb_msg_len = 0;
+            }
+            if (usb_msg_len > 0) {
+                // move remaining data to start of buffer
+                memmove(usb_msg_buffer, end_of_msg + 1, usb_msg_len);
+            }
+
+            // repeat if \n in buffer
+            end_of_msg = strchr(usb_msg_buffer, '\n'); // test if \n in buffer
+        }
+
+        // drop a full buffer without newlines
+        if (usb_msg_len == (USB_MSG_MAXLEN - 1)) {
+            usb_msg_len = 0;
+        }
+
+        if (full_response_len > 0) {
+            usbd_ep_write_packet(usbd_dev, 0x82, response_buffer, full_response_len);
+        }
     }
 }
 
