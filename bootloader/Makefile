@@ -20,8 +20,13 @@ CFLAGS += -mcpu=cortex-m3 -mthumb -msoft-float -DSTM32F1 \
 
 bootloader: setup force_bootloader.o
 	FORCE_BOOTLOADER_OBJ=$(realpath force_bootloader.o) $(MAKE) -C dfu-bootloader usb_dfu.bin
+	cp dfu-bootloader/usb_dfu.bin usb_dfu.bin
 
 setup:
 	$(Q)$(MAKE) -C dfu-bootloader/libopencm3
+
+clean:
+	$(Q)$(MAKE) -C dfu-bootloader clean
+	rm force_bootloader.o
 
 # Using implit C compile rule: '$(CC) $(CPPFLAGS) $(CFLAGS) -c'
