@@ -1,0 +1,42 @@
+name: Build binaries
+
+on: push
+# on:
+#   push:
+#     branches: [ master ]
+#   pull_request:
+#     branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    - name: Setup arm-none-eabi-gcc
+      uses: carlosperate/arm-none-eabi-gcc-action@v1
+      with:
+        release: 11.2-2022.02
+    - name: Set up Python 3.7
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.7
+    - name: Build libopencm3
+      run: make lib
+    - name: Make main binary
+      run: make -C src
+    - name: Make bootloader
+      run: make -C bootloader
+    - name: Consolidate binaries
+      run: |
+        mkdir dist
+        cp src/main.elf dist/
+        cp src/main.bin dist/
+        cp bootloader/usb_dfu.bin dist/
+    - name: Archive produced binaries
+      uses: actions/upload-artifact@v3
+      with:
+        name: sbv4-binaries
+        path: dist/*
