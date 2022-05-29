@@ -181,41 +181,41 @@ endif
 endif
 
 %.images: %.bin %.hex %.srec %.list %.map
-	@#printf "*** $* images generated ***\n"
+	@printf "*** $* images generated ***\n"
 
 %.bin: %.elf
-	@#printf "  OBJCOPY $(*).bin\n"
+	@printf "  OBJCOPY $(*).bin\n"
 # pad binary out to full size of flash
 	$(Q)$(OBJCOPY) -Obinary --pad-to 0x08008000 $(*).elf $(*).bin
 # compute CRC32 of binary and inject into third word of bin
 	$(Q)$(SCRIPT_DIR)/crctool.py -w $(*).bin
 
 %.hex: %.elf
-	@#printf "  OBJCOPY $(*).hex\n"
+	@printf "  OBJCOPY $(*).hex\n"
 	$(Q)$(OBJCOPY) -Oihex $(*).elf $(*).hex
 
 %.srec: %.elf
-	@#printf "  OBJCOPY $(*).srec\n"
+	@printf "  OBJCOPY $(*).srec\n"
 	$(Q)$(OBJCOPY) -Osrec $(*).elf $(*).srec
 
 %.list: %.elf
-	@#printf "  OBJDUMP $(*).list\n"
+	@printf "  OBJDUMP $(*).list\n"
 	$(Q)$(OBJDUMP) -S $(*).elf > $(*).list
 
 %.elf %.map: $(OBJS) $(LDSCRIPT) $(OPENCM3_DIR)/lib/lib$(LIBNAME).a
-	@#printf "  LD      $(*).elf\n"
+	@printf "  LD      $(*).elf\n"
 	$(Q)$(LD) $(TGT_LDFLAGS) $(LDFLAGS) $(OBJS) $(LDLIBS) -o $(*).elf
 
 %.o: %.c
-	@#printf "  CC      $(*).c\n"
+	@printf "  CC      $(*).c\n"
 	$(Q)$(CC) $(TGT_CFLAGS) $(CFLAGS) $(TGT_CPPFLAGS) $(CPPFLAGS) -o $(*).o -c $(*).c
 
 %.o: %.cxx
-	@#printf "  CXX     $(*).cxx\n"
+	@printf "  CXX     $(*).cxx\n"
 	$(Q)$(CXX) $(TGT_CXXFLAGS) $(CXXFLAGS) $(TGT_CPPFLAGS) $(CPPFLAGS) -o $(*).o -c $(*).cxx
 
 %.o: %.cpp
-	@#printf "  CXX     $(*).cpp\n"
+	@printf "  CXX     $(*).cpp\n"
 	$(Q)$(CXX) $(TGT_CXXFLAGS) $(CXXFLAGS) $(TGT_CPPFLAGS) $(CPPFLAGS) -o $(*).o -c $(*).cpp
 
 
