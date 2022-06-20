@@ -3,6 +3,7 @@
 #include <libopencm3/stm32/gpio.h>
 
 #include "cdcacm.h"
+#include "servo.h"
 
 #define REENTER_BOOTLOADER_RENDEZVOUS	0x08001FFC
 
@@ -37,6 +38,7 @@ void init(void)
     AFIO_MAPR |= AFIO_MAPR_SWJ_CFG_JTAG_OFF_SW_ON;
 
     usb_init();
+    servo_init();
 }
 
 void jump_to_bootloader(void)
