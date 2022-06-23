@@ -1,5 +1,6 @@
 #include "servo.h"
 #include "i2c.h"
+#include "led.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -54,7 +55,6 @@ static void init_timer(void) {
     timer_enable_oc_preload(TIM1, TIM_OC1);
 }
 
-/// TODO leds
 void servo_init(void) {
     // configure i2c expander
     i2c_init();
@@ -82,6 +82,7 @@ void servo_set_pos(uint8_t idx, uint16_t pulse_us) {
 
     // servos are automatically enabled when they are set
     servo_state[idx].enabled = 1;
+    set_led(idx);
     servo_state[idx].pulse = US_TO_TICK(pulse_us);
 }
 
@@ -89,6 +90,7 @@ void servo_disable(uint8_t idx) {
     if (idx >= NUM_SERVOS) {
         return;
     }
+    clear_led(idx);
     servo_state[idx].enabled = 0;
 }
 
@@ -149,7 +151,6 @@ static void load_servo_state(void) {
     memcpy(&(current_servo_state[num_active+1]), inactive_servos, sizeof(servo_t) * num_inactive);
 }
 
-/// TODO if watchdog tripped re-init expander
 void start_servo_period(void) {
     // disable timer interrupt
     timer_disable_irq(TIM1, TIM_DIER_CC1IE);
@@ -184,6 +185,8 @@ void start_servo_period(void) {
 void tim1_cc_isr(void) {
     uint8_t next_servo_step;
     uint8_t current_servo_index;
+
+    set_led(LED_STATUS_RED);
 
     do {
         next_servo_step = current_servo_step + 1;
@@ -231,4 +234,5 @@ void tim1_cc_isr(void) {
     }
 
     timer_clear_flag(TIM1, TIM_SR_CC1IF);
+    clear_led(LED_STATUS_RED);
 }

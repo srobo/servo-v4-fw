@@ -4,6 +4,8 @@
 
 #include "cdcacm.h"
 #include "servo.h"
+#include "led.h"
+#include "systick.h"
 
 #define REENTER_BOOTLOADER_RENDEZVOUS	0x08001FFC
 
@@ -14,10 +16,7 @@ int main(void)
 {
     init();
 
-    // enable status LED
-    gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_10_MHZ,
-              GPIO_CNF_OUTPUT_PUSHPULL, GPIO11);
-    gpio_clear(GPIOB, GPIO11);
+    set_led(LED_STATUS_BLUE);
 
     while (1) {
         usb_poll();
@@ -37,8 +36,10 @@ void init(void)
 
     AFIO_MAPR |= AFIO_MAPR_SWJ_CFG_JTAG_OFF_SW_ON;
 
+    led_init();
     usb_init();
     servo_init();
+    systick_init();
 }
 
 void jump_to_bootloader(void)
