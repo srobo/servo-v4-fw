@@ -92,7 +92,7 @@ void servo_disable(uint8_t idx) {
     servo_state[idx].enabled = 0;
 }
 
-uint32_t servo_get_pos(uint8_t idx) {
+uint16_t servo_get_pos(uint8_t idx) {
     if (idx >= NUM_SERVOS) {
         return -1;
     }
@@ -100,6 +100,12 @@ uint32_t servo_get_pos(uint8_t idx) {
         return 0;
     } else {
         return TICK_TO_US(servo_state[idx].pulse);
+    }
+}
+
+void servo_reset(void) {
+    for (uint8_t i=0; i < NUM_SERVOS; i++) {
+        servo_disable(i);
     }
 }
 
