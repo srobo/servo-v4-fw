@@ -53,6 +53,9 @@ static void init_timer(void) {
     // Don't alter output on compare match
     timer_set_oc_mode(TIM1, TIM_OC1, TIM_OCM_FROZEN);
     timer_enable_oc_preload(TIM1, TIM_OC1);
+
+    // Start counting
+    timer_enable_counter(TIM1);
 }
 
 void servo_init(void) {
@@ -182,6 +185,7 @@ void start_servo_period(void) {
     timer_enable_irq(TIM1, TIM_DIER_CC1IE);
 }
 
+/// TODO rework snapping pulse values in deadzone forward
 void tim1_cc_isr(void) {
     uint8_t next_servo_step;
     uint8_t current_servo_index;
@@ -196,7 +200,7 @@ void tim1_cc_isr(void) {
         current_pin_state &= ~((uint16_t)(1 << servo_bit_mapping[current_servo_index]));
 
         // multiple servos may be set to the same value, set all the bits together
-        while (current_servo_state[next_servo_step].pulse == current_servo_state[current_servo_step].pulse) {
+        while (current_servo_state[next_servo_step].pulse <= (current_servo_state[current_servo_step].pulse + US_TO_TICK(20))) {
             if (current_servo_state[next_servo_step].enabled == 0) {
                 break;
             }
@@ -217,7 +221,7 @@ void tim1_cc_isr(void) {
     // since sending I2C messages is slow (20us/byte) we may have missed the next servo's pulse end
     // so we'll handle that right now
         current_servo_step = next_servo_step;
-    } while ((uint16_t)(current_servo_state[next_servo_step].pulse + 2) > timer_get_counter(TIM1));
+    } while ((uint16_t)(current_servo_state[next_servo_step].pulse + 1) > timer_get_counter(TIM1));
 
     // completed all active servos
     if(current_servo_state[next_servo_step].enabled == 0 || next_servo_step >= NUM_SERVOS) {
