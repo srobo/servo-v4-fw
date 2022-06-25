@@ -16,3 +16,9 @@ char i2c_recv_byte(bool last_byte);
 // Set expander into byte/bank mode (IOCON.SEQOP=0, IOCON.BANK=0)
 // configure pin directions and pullups
 void init_expander(uint8_t addr);
+
+void init_i2c_watchdog(void);
+void start_i2c_watchdog(void);
+void stop_i2c_watchdog(void);
+void reset_i2c_watchdog(void);
+bool i2c_watchdog_timed_out = false;

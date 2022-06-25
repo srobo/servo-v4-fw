@@ -1,6 +1,8 @@
 #include "i2c.h"
+#include "led.h"
 
-/// TODO watchdog to prevent I2C lockups
+#include <libopencm3/stm32/timer.h>
+#include <libopencm3/cm3/nvic.h>
 
 void i2c_init(void){
     // Set I2C alternate functions on PB6 & PB7
@@ -19,17 +21,23 @@ void i2c_init(void){
     i2c_set_speed(I2C1, i2c_speed_fm_400k, 14);
 
     i2c_peripheral_enable(I2C1);
+    init_i2c_watchdog();
 }
 
 void i2c_start_message(uint8_t addr, uint8_t recv){
     uint32_t reg32 __attribute__((unused));
+
+    if(i2c_watchdog_timed_out) {return;}
+    start_i2c_watchdog();
 
     // Send START condition.
     i2c_send_start(I2C1);
 
     // Waiting for START to send and switch to master mode.
     while (!((I2C_SR1(I2C1) & I2C_SR1_SB)
-        && (I2C_SR2(I2C1) & (I2C_SR2_MSL | I2C_SR2_BUSY))));
+        && (I2C_SR2(I2C1) & (I2C_SR2_MSL | I2C_SR2_BUSY)))
+        && !i2c_watchdog_timed_out);
+    if(i2c_watchdog_timed_out) {return;}
 
     // Say to what address we want to talk to.
     i2c_send_7bit_address(I2C1, addr, recv);
@@ -40,35 +48,54 @@ void i2c_start_message(uint8_t addr, uint8_t recv){
     }
 
     // Waiting for address to transfer.
-    while (!(I2C_SR1(I2C1) & I2C_SR1_ADDR));
+    while (!(I2C_SR1(I2C1) & I2C_SR1_ADDR) && !i2c_watchdog_timed_out);
+    if(i2c_watchdog_timed_out) {return;}
 
     // Cleaning ADDR condition sequence.
     reg32 = I2C_SR2(I2C1);
+
+    stop_i2c_watchdog();
 }
 
 void i2c_stop_message(void){
+    if(i2c_watchdog_timed_out) {return;}
+    start_i2c_watchdog();
+
     // Wait for the data register to be empty.
     // This will not be set if a NACK is received.
-    while (!(I2C_SR1(I2C1) & I2C_SR1_TxE));
+    while (!(I2C_SR1(I2C1) & I2C_SR1_TxE) && !i2c_watchdog_timed_out);
+    if(i2c_watchdog_timed_out) {return;}
 
     // Send STOP condition.
     i2c_send_stop(I2C1);
+
+    stop_i2c_watchdog();
 }
 
 void i2c_send_byte(char c){
+    if(i2c_watchdog_timed_out) {return;}
+    start_i2c_watchdog();
+
     i2c_send_data(I2C1, c);
     // Wait for byte to complete transferring
-    while (!(I2C_SR1(I2C1) & I2C_SR1_BTF));
+    while (!(I2C_SR1(I2C1) & I2C_SR1_BTF) && !i2c_watchdog_timed_out);
+    if(i2c_watchdog_timed_out) {return;}
+
+    stop_i2c_watchdog();
 }
 
 char i2c_recv_byte(bool last_byte){
+    if(i2c_watchdog_timed_out) {return -1;}
+    start_i2c_watchdog();
+
     // Respond NACK to last byte
     if (last_byte) {
         i2c_disable_ack(I2C1);
     }
 
     // Wait for the receive register to not be empty
-    while (!(I2C_SR1(I2C1) & I2C_SR1_RxNE));
+    while (!(I2C_SR1(I2C1) & I2C_SR1_RxNE) && !i2c_watchdog_timed_out);
+    if(i2c_watchdog_timed_out) {return -1;}
     char res = i2c_get_data(I2C1);
 
     // End the transmission
@@ -76,6 +103,7 @@ char i2c_recv_byte(bool last_byte){
         i2c_send_stop(I2C1);
     }
 
+    stop_i2c_watchdog();
     return res;
 }
 
@@ -108,4 +136,55 @@ void init_expander(uint8_t addr){
     i2c_send_byte(GPPUA);
     i2c_send_byte(0x90);  // PGOOD, VAUX_MON
     i2c_stop_message();
+}
+
+void init_i2c_watchdog(void) {
+    // We use a timer to emulate a watchdog because we only want to
+    // reset the I2C comms not fully reset the MCU
+
+    // Enable interrupts from TIM2 with very high priority
+    nvic_enable_irq(NVIC_TIM2_IRQ);
+    nvic_set_priority(NVIC_TIM2_IRQ, 1);
+
+    // Enable TIM2 clock
+    rcc_periph_clock_enable(RCC_TIM2);
+
+    // Set timer prescaler. 72MHz/1440 => 50000 counts per second.
+    timer_set_prescaler(TIM2, 1440);
+
+    // End timer value. If this is reached an interrupt is generated.
+    timer_set_period(TIM2, 50000);
+
+    // Set timer start value.
+    timer_set_counter(TIM2, 0);
+
+    // Enable interrupt on overflow
+    timer_enable_irq(TIM2, TIM_DIER_UIE);
+
+    // Start timer.
+    timer_enable_counter(TIM2);
+}
+
+void start_i2c_watchdog(void) {
+    // set timer val to 0
+    timer_set_counter(TIM2, 0);
+    // start counting
+    timer_enable_counter(TIM2);
+}
+
+void stop_i2c_watchdog(void) {
+    // stop counting
+    timer_disable_counter(TIM2);
+}
+
+void reset_i2c_watchdog(void) {
+    // stop watchdog
+    stop_i2c_watchdog();
+    // clear flag
+    i2c_watchdog_timed_out = false;
+}
+
+void tim2_isr(void) {
+    i2c_watchdog_timed_out = true;
+    timer_clear_flag(TIM2, TIM_SR_UIF);
 }
