@@ -1,6 +1,10 @@
 #include "systick.h"
+#include "servo.h"
+#include "i2c.h"
 
 #include <libopencm3/cm3/systick.h>
+
+uint8_t systick_servo_tick = 0;
 
 void systick_init(void) {
     // Generate a 1ms systick interrupt
@@ -18,6 +22,15 @@ void systick_init(void) {
 }
 
 void sys_tick_handler(void) {
-    ;
-    /// TODO if watchdog tripped re-init expander
+    // Every 20 ms start servo pulse
+    if (++systick_servo_tick == 20) {
+        // if watchdog tripped re-init expander
+        if (i2c_watchdog_timed_out) {
+            // reset watchdog
+            reset_i2c_watchdog();
+            init_expander(0x21);
+        }
+        start_servo_period();
+        systick_servo_tick = 0;
+    }
 }
