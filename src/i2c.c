@@ -4,6 +4,8 @@
 #include <libopencm3/stm32/timer.h>
 #include <libopencm3/cm3/nvic.h>
 
+#define I2C_EXIT_ON_WATCHDOG(x) if(i2c_watchdog_timed_out) {i2c_send_stop(I2C1); return x;}
+
 void i2c_init(void){
     // Set I2C alternate functions on PB6 & PB7
     gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_50_MHZ,
@@ -27,7 +29,7 @@ void i2c_init(void){
 void i2c_start_message(uint8_t addr, uint8_t recv){
     uint32_t reg32 __attribute__((unused));
 
-    if(i2c_watchdog_timed_out) {return;}
+    I2C_EXIT_ON_WATCHDOG();
     start_i2c_watchdog();
 
     // Send START condition.
@@ -37,7 +39,7 @@ void i2c_start_message(uint8_t addr, uint8_t recv){
     while (!((I2C_SR1(I2C1) & I2C_SR1_SB)
         && (I2C_SR2(I2C1) & (I2C_SR2_MSL | I2C_SR2_BUSY)))
         && !i2c_watchdog_timed_out);
-    if(i2c_watchdog_timed_out) {return;}
+    I2C_EXIT_ON_WATCHDOG();
 
     // Say to what address we want to talk to.
     i2c_send_7bit_address(I2C1, addr, recv);
@@ -49,7 +51,7 @@ void i2c_start_message(uint8_t addr, uint8_t recv){
 
     // Waiting for address to transfer.
     while (!(I2C_SR1(I2C1) & I2C_SR1_ADDR) && !i2c_watchdog_timed_out);
-    if(i2c_watchdog_timed_out) {return;}
+    I2C_EXIT_ON_WATCHDOG();
 
     // Cleaning ADDR condition sequence.
     reg32 = I2C_SR2(I2C1);
@@ -58,13 +60,12 @@ void i2c_start_message(uint8_t addr, uint8_t recv){
 }
 
 void i2c_stop_message(void){
-    if(i2c_watchdog_timed_out) {return;}
+    I2C_EXIT_ON_WATCHDOG();
     start_i2c_watchdog();
 
-    // Wait for the data register to be empty.
-    // This will not be set if a NACK is received.
-    while (!(I2C_SR1(I2C1) & I2C_SR1_TxE) && !i2c_watchdog_timed_out);
-    if(i2c_watchdog_timed_out) {return;}
+    // Wait for the data register to be empty or a NACK to be generated.
+    while (!(I2C_SR1(I2C1) & (I2C_SR1_TxE | I2C_SR1_AF)) && !i2c_watchdog_timed_out);
+    I2C_EXIT_ON_WATCHDOG();
 
     // Send STOP condition.
     i2c_send_stop(I2C1);
@@ -73,19 +74,19 @@ void i2c_stop_message(void){
 }
 
 void i2c_send_byte(char c){
-    if(i2c_watchdog_timed_out) {return;}
+    I2C_EXIT_ON_WATCHDOG();
     start_i2c_watchdog();
 
     i2c_send_data(I2C1, c);
     // Wait for byte to complete transferring
     while (!(I2C_SR1(I2C1) & I2C_SR1_BTF) && !i2c_watchdog_timed_out);
-    if(i2c_watchdog_timed_out) {return;}
+    I2C_EXIT_ON_WATCHDOG();
 
     stop_i2c_watchdog();
 }
 
 char i2c_recv_byte(bool last_byte){
-    if(i2c_watchdog_timed_out) {return -1;}
+    I2C_EXIT_ON_WATCHDOG(-1);
     start_i2c_watchdog();
 
     // Respond NACK to last byte
@@ -95,7 +96,7 @@ char i2c_recv_byte(bool last_byte){
 
     // Wait for the receive register to not be empty
     while (!(I2C_SR1(I2C1) & I2C_SR1_RxNE) && !i2c_watchdog_timed_out);
-    if(i2c_watchdog_timed_out) {return -1;}
+    I2C_EXIT_ON_WATCHDOG(-1);
     char res = i2c_get_data(I2C1);
 
     // End the transmission
