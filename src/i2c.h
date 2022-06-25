@@ -21,4 +21,5 @@ void init_i2c_watchdog(void);
 void start_i2c_watchdog(void);
 void stop_i2c_watchdog(void);
 void reset_i2c_watchdog(void);
-bool i2c_watchdog_timed_out = false;
+
+extern bool i2c_watchdog_timed_out;

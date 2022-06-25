@@ -3,6 +3,7 @@
 #include "i2c.h"
 
 #include <libopencm3/cm3/systick.h>
+#include <libopencm3/cm3/nvic.h>
 
 uint8_t systick_servo_tick = 0;
 
