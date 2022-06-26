@@ -3,12 +3,18 @@
 
 #include "msg_handler.h"
 
-int parse_msg(char* buf, int len, char* response, int max_len)
+int parse_msg(char* buf, char* response, int max_len)
 {
-    (void)max_len;
-    /// TODO check the response fits
+    response[0] = '\0';  // make a blank string
 
-    memcpy(response, buf, len);
-    response[len - 1] = '\n';  // revert null terminator to new line
-    return len;
+    char* next_arg = strtok(buf, ":");
+    if (strcmp(next_arg, "ECHO") == 0) {
+        next_arg = strtok(NULL, ":");
+
+        strncat(response, next_arg, max_len);
+        return strlen(response);
+    } else {
+        strncat(response, "NACK:Unknown command", max_len);
+        return strlen(response);
+    }
 }
