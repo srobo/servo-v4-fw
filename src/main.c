@@ -6,8 +6,18 @@
 #include "servo.h"
 #include "led.h"
 #include "systick.h"
+#include "global_vars.h"
 
 #define REENTER_BOOTLOADER_RENDEZVOUS	0x08001FFC
+
+// ## Global variable defines ##
+// externs in global_vars.h
+
+bool detected_power_good = false;
+int board_voltage_mv = 0;
+int board_current_ma = 0;
+
+// ####
 
 void init(void);
 void jump_to_bootloader(void);

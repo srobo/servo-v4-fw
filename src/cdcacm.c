@@ -27,8 +27,7 @@
 
 #include "cdcacm.h"
 #include "msg_handler.h"
-
-#define SERIALNUM_BOOTLOADER_LOC	0x08001FE0
+#include "global_vars.h"
 
 static usbd_device *g_usbd_dev;
 bool re_enter_bootloader = false;
