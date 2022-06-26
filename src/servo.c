@@ -12,7 +12,6 @@
 #define US_TO_TICK(x) ((uint16_t)x / 5)
 #define TICK_TO_US(x) (x * 5)
 
-#define NUM_SERVOS 12
 // in uS
 #define MIN_SERVO_PULSE 200
 #define MAX_SERVO_PULSE 10000

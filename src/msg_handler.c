@@ -34,7 +34,11 @@ int parse_msg(char* buf, char* response, int max_len)
             return strlen(response);
         } else if (isdigit((int)next_arg[0])) {
             servo_num = atoi(next_arg);
-            /// TODO bounds check
+            // bounds check
+            if (servo_num < 0 || servo_num >= NUM_SERVOS) {
+                strncat(response, "NACK:Invalid servo number", max_len);
+                return strlen(response);
+            }
         } else {
             strncat(response, "NACK:Missing servo number", max_len);
             return strlen(response);
@@ -58,8 +62,12 @@ int parse_msg(char* buf, char* response, int max_len)
 
             int servo_val = atoi(next_arg);
 
+            // bounds check
+            if (servo_val < 0 || servo_val > UINT16_MAX) {
+                strncat(response, "NACK:Invalid servo setpoint", max_len);
+                return strlen(response);
+            }
             // Set servo value
-            /// TODO bounds check
             servo_set_pos((uint8_t) servo_num, (uint16_t) servo_val);
 
             strncat(response, "ACK", max_len);
