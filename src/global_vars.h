@@ -12,3 +12,5 @@ extern bool detected_power_good;
 
 extern int board_voltage_mv;
 extern int board_current_ma;
+
+extern bool current_sense_updated;

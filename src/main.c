@@ -7,6 +7,7 @@
 #include "led.h"
 #include "systick.h"
 #include "global_vars.h"
+#include "i2c.h"
 
 #define REENTER_BOOTLOADER_RENDEZVOUS	0x08001FFC
 
@@ -16,6 +17,8 @@
 bool detected_power_good = false;
 int board_voltage_mv = 0;
 int board_current_ma = 0;
+
+bool current_sense_updated = true;
 
 // ####
 
@@ -30,6 +33,11 @@ int main(void)
 
     while (1) {
         usb_poll();
+        // measure servo current in dead-time after all pulses
+        if (!processing_servo_pulses && !current_sense_updated) {
+            get_expander_status(I2C_EXPANDER_ADDR);
+            measure_current_sense(CURRENT_SENSE_ADDR);
+        }
         if (re_enter_bootloader) {
             jump_to_bootloader();
         }
@@ -49,6 +57,7 @@ void init(void)
     led_init();
     usb_init();
     servo_init();
+    init_current_sense(CURRENT_SENSE_ADDR);
     systick_init();
 }
 

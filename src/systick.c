@@ -1,6 +1,7 @@
 #include "systick.h"
 #include "servo.h"
 #include "i2c.h"
+#include "global_vars.h"
 
 #include <libopencm3/cm3/systick.h>
 #include <libopencm3/cm3/nvic.h>
@@ -29,9 +30,11 @@ void sys_tick_handler(void) {
         if (i2c_watchdog_timed_out) {
             // reset watchdog
             reset_i2c_watchdog();
-            init_expander(0x21);
+            init_expander(I2C_EXPANDER_ADDR);
+            init_current_sense(CURRENT_SENSE_ADDR);
         }
         start_servo_period();
+        current_sense_updated = false;
         systick_servo_tick = 0;
     }
 }

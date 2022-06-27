@@ -60,7 +60,7 @@ static void init_timer(void) {
 void servo_init(void) {
     // configure i2c expander
     i2c_init();
-    init_expander(0x21);
+    init_expander(I2C_EXPANDER_ADDR);
 
     // initialise servo state indexes
     for (uint8_t i = 0; i < NUM_SERVOS; i++) {
@@ -184,7 +184,6 @@ void start_servo_period(void) {
     timer_enable_irq(TIM1, TIM_DIER_CC1IE);
 }
 
-/// TODO rework snapping pulse values in deadzone forward
 void tim1_cc_isr(void) {
     uint8_t next_servo_step;
     uint8_t current_servo_index;

@@ -11,3 +11,5 @@ uint16_t servo_get_pos(uint8_t idx);
 void servo_reset(void);
 
 void start_servo_period(void);
+
+extern volatile uint8_t processing_servo_pulses;

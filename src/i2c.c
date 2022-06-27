@@ -1,5 +1,6 @@
 #include "i2c.h"
 #include "led.h"
+#include "global_vars.h"
 
 #include <libopencm3/stm32/timer.h>
 #include <libopencm3/cm3/nvic.h>
@@ -139,6 +140,62 @@ void init_expander(uint8_t addr){
     i2c_send_byte(GPPUA);
     i2c_send_byte(0x90);  // PGOOD, VAUX_MON
     i2c_stop_message();
+}
+
+void get_expander_status(uint8_t addr) {
+    // Read bit 7 of GPIOA (0x12)
+    i2c_start_message(addr, I2C_WRITE);
+    i2c_send_byte(0x12);
+    i2c_start_message(addr, I2C_READ);  // repeated start bit
+    uint8_t status = i2c_recv_byte(true);
+    i2c_stop_message();
+
+    // if i2c timed out don't write to global values
+    if (!i2c_watchdog_timed_out) {
+        detected_power_good = (status & (1 << 7));
+    }
+}
+
+void init_current_sense(uint8_t addr) {
+    #define I_SHUNT_RES 0.003
+    #define I_SENSE_LSB 0.001
+
+    uint16_t cal_val = (uint16_t)(0.04096/(I_SHUNT_RES * I_SENSE_LSB));
+
+    // Program calibration reg (0x05) w/ shunt value
+    i2c_start_message(addr, I2C_WRITE);
+    i2c_send_byte(0x05);  // calibration reg address
+    i2c_send_byte((uint8_t)((cal_val >> 8) & 0xff));
+    i2c_send_byte((uint8_t)(cal_val & 0xff));
+    i2c_stop_message();
+}
+
+void measure_current_sense(uint8_t addr) {
+    // Set register pointer to current register
+    i2c_start_message(addr, I2C_WRITE);
+    i2c_send_byte(0x05);
+    i2c_stop_message();
+
+    i2c_start_message(addr, I2C_READ);
+    int16_t curr_val = ((int16_t)i2c_recv_byte(false) << 8);
+    curr_val |= ((int16_t)i2c_recv_byte(true) & 0xff);
+
+    // Set register pointer to voltage register
+    i2c_start_message(addr, I2C_WRITE);
+    i2c_send_byte(0x02);
+    i2c_stop_message();
+
+    i2c_start_message(addr, I2C_READ);
+    int16_t volt_val = ((int16_t)i2c_recv_byte(false) << 8);
+    volt_val |= ((int16_t)i2c_recv_byte(true) & 0xff);
+    volt_val >>= 1;  // rshift to get 1mV/bit
+
+    // if i2c timed out don't write to global values
+    if (!i2c_watchdog_timed_out) {
+        board_voltage_mv = volt_val;
+        board_current_ma = curr_val;
+    }
+    current_sense_updated = true;
 }
 
 void init_i2c_watchdog(void) {
