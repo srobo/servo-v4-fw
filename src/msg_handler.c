@@ -55,7 +55,7 @@ int parse_msg(char* buf, char* response, int max_len)
             if (next_arg == NULL) {
                 strncat(response, "NACK:Missing servo setpoint", max_len);
                 return strlen(response);
-            } else if (isdigit((int)next_arg[0])) {
+            } else if (!isdigit((int)next_arg[0])) {
                 strncat(response, "NACK:Invalid servo setpoint", max_len);
                 return strlen(response);
             }
@@ -93,14 +93,17 @@ int parse_msg(char* buf, char* response, int max_len)
         return strlen(response);
     } else if (strcmp(next_arg, "IDN") == 0) {
         // Identifier string: manufacturer, board name, asset tag, version
-        strncat(response, "Student Robotics", max_len);
+        strncat(response, "Student Robotics:", max_len);
         strncat(response, BOARD_NAME_SHORT, max_len - strlen(response));
+        strncat(response, ":", max_len - strlen(response));
         strncat(response, (const char *)SERIALNUM_BOOTLOADER_LOC, max_len - strlen(response));
+        strncat(response, ":", max_len - strlen(response));
         strncat(response, FW_VER, max_len - strlen(response));
         return strlen(response);
     } else if (strcmp(next_arg, "STATUS") == 0) {
         strncat(response, i2c_watchdog_timed_out ? "1" : "0", max_len);  // watchdog failed
-        strncat(response, detected_power_good ? "1" : "0", max_len);  // power good
+        strncat(response, ":", max_len - strlen(response));
+        strncat(response, detected_power_good ? "1" : "0", max_len - strlen(response));  // power good
         return strlen(response);
     } else if (strcmp(next_arg, "ECHO") == 0) {
         next_arg = strtok(NULL, ":");
@@ -108,7 +111,9 @@ int parse_msg(char* buf, char* response, int max_len)
         strncat(response, next_arg, max_len);
         return strlen(response);
     } else {
-        strncat(response, "NACK:Unknown command", max_len);
+        strncat(response, "NACK:Unknown command: '", max_len);
+        strncat(response, next_arg, max_len - strlen(response));
+        strncat(response, "'", max_len - strlen(response));
         return strlen(response);
     }
 
@@ -120,7 +125,8 @@ int parse_msg(char* buf, char* response, int max_len)
 static char* itoa(int value, char* string) {
     // including stdio.h to get sprintf overflows the rom
     char tmp[33];
-    char *tmp_ptr = tmp;
+    char* tmp_ptr = tmp;
+    char* sp = string;
     unsigned int digit;
     unsigned int remaining;
     bool sign;
@@ -144,17 +150,17 @@ static char* itoa(int value, char* string) {
     }
 
     if (sign) {
-        *string = '-';
-        string++;
+        *sp = '-';
+        sp++;
     }
 
     // string is in reverse at this point
     while (tmp_ptr > tmp) {
         tmp_ptr--;
-        *string = *tmp_ptr;
-        string++;
+        *sp = *tmp_ptr;
+        sp++;
     }
-    *string = '\0';
+    *sp = '\0';
 
     return string;
 }

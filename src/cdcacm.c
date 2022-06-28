@@ -276,10 +276,15 @@ static void cdcacm_data_rx_cb(usbd_device *usbd_dev, uint8_t ep)
 
         while (end_of_msg != NULL) {
             *end_of_msg = '\0'; // replace newline with null terminator
+            char* carriage_return = strchr(usb_msg_buffer, '\r');
+            if (carriage_return) {
+                *carriage_return = '\0';  // remove a \r
+            }
+
             int msg_len = end_of_msg - usb_msg_buffer + 1;
 
             int usb_response_len = parse_msg(usb_msg_buffer, response_ptr, 63 - full_response_len);
-            response_ptr[usb_response_len] = '\n';  // replace null-terminator with newline
+            response_ptr[usb_response_len++] = '\n';  // replace null-terminator with newline
             full_response_len += usb_response_len;
             response_ptr += usb_response_len;
 
