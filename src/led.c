@@ -16,28 +16,28 @@ void led_init(void) {
 
 void set_led(uint8_t idx) {
     if (idx < 8) {
-        // active high LEDs
-        gpio_set(GPIOA, 1 << idx);
+        // active high LEDs, pin order reversed
+        gpio_set(GPIOA, 1 << (7 - idx));
     } else if (idx < 12) {
         // active low LEDs, starting from PB10
         gpio_clear(GPIOB, 1 << (idx + 4));
     } else if (idx == LED_STATUS_RED) {
-        gpio_clear(GPIOB, 10);
+        gpio_clear(GPIOB, 1 << 10);
     } else if (idx == LED_STATUS_BLUE) {
-        gpio_clear(GPIOB, 11);
+        gpio_clear(GPIOB, 1 << 11);
     }
 }
 
 void clear_led(uint8_t idx) {
     if (idx < 8) {
-        // active high LEDs
-        gpio_clear(GPIOA, 1 << idx);
+        // active high LEDs, pin order reversed
+        gpio_clear(GPIOA, 1 << (7 - idx));
     } else if (idx < 12) {
         // active low LEDs, starting from PB10
         gpio_set(GPIOB, 1 << (idx + 4));
     } else if (idx == LED_STATUS_RED) {
-        gpio_set(GPIOB, 10);
+        gpio_set(GPIOB, 1 << 10);
     } else if (idx == LED_STATUS_BLUE) {
-        gpio_set(GPIOB, 11);
+        gpio_set(GPIOB, 1 << 11);
     }
 }
