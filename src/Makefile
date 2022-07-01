@@ -72,6 +72,9 @@ clean:
 stylecheck: $(STYLECHECKFILES:=.stylecheck)
 styleclean: $(STYLECHECKFILES:=.styleclean)
 
+size: $(BINARY).elf
+	$(Q)arm-none-eabi-size -G -d $(BINARY).elf
+
 .PHONY: images clean stylecheck styleclean elf bin hex srec list
 
 -include $(OBJS:.o=.d)
