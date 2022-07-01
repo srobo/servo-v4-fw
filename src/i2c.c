@@ -5,7 +5,7 @@
 #include <libopencm3/stm32/timer.h>
 #include <libopencm3/cm3/nvic.h>
 
-#define I2C_EXIT_ON_WATCHDOG(x) if(i2c_watchdog_timed_out) {i2c_send_stop(I2C1); return x;}
+#define I2C_EXIT_ON_WATCHDOG(x) if(i2c_watchdog_timed_out) {if (I2C_SR2(I2C1) & I2C_SR2_BUSY) {i2c_send_stop(I2C1);} return x;}
 
 volatile bool i2c_watchdog_timed_out = false;
 
@@ -149,7 +149,6 @@ void get_expander_status(uint8_t addr) {
     i2c_send_byte(0x12);
     i2c_start_message(addr, I2C_READ);  // repeated start bit
     uint8_t status = i2c_recv_byte(true);
-    i2c_stop_message();
 
     // if i2c timed out don't write to global values
     if (!i2c_watchdog_timed_out) {
