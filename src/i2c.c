@@ -12,8 +12,9 @@ bool i2c_watchdog_timed_out = false;
 void i2c_init(void){
     // Set I2C alternate functions on PB6 & PB7
     gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_50_MHZ,
-                  GPIO_CNF_OUTPUT_ALTFN_PUSHPULL,
-                  GPIO_I2C1_SCL | GPIO_I2C1_SDA);
+              GPIO_CNF_OUTPUT_ALTFN_PUSHPULL, GPIO_I2C1_SCL);
+    gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_50_MHZ,
+              GPIO_CNF_OUTPUT_ALTFN_OPENDRAIN, GPIO_I2C1_SDA);
 
     // Enable clock for I2C
     rcc_periph_clock_enable(RCC_I2C1);
