@@ -210,20 +210,18 @@ void init_i2c_watchdog(void) {
     // Enable TIM2 clock
     rcc_periph_clock_enable(RCC_TIM2);
 
-    // Set timer prescaler. 72MHz/1440 => 50000 counts per second.
-    timer_set_prescaler(TIM2, 1440);
+    // Set timer prescaler. 72MHz/7200 => 10000 counts per second.
+    timer_set_prescaler(TIM2, 7200);
 
     // End timer value. If this is reached an interrupt is generated.
-    timer_set_period(TIM2, 50000);
+    // Watchdog duration set to 10ms
+    timer_set_period(TIM2, 100);
 
     // Set timer start value.
     timer_set_counter(TIM2, 0);
 
     // Enable interrupt on overflow
     timer_enable_irq(TIM2, TIM_DIER_UIE);
-
-    // Start timer.
-    timer_enable_counter(TIM2);
 }
 
 void start_i2c_watchdog(void) {
@@ -255,6 +253,7 @@ void disable_i2c_watchdog(void) {
 }
 
 void tim2_isr(void) {
+    // watchdog tripped
     i2c_watchdog_timed_out = true;
     timer_clear_flag(TIM2, TIM_SR_UIF);
 }
