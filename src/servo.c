@@ -197,8 +197,6 @@ void tim1_cc_isr(void) {
     uint8_t next_servo_step;
     uint8_t current_servo_index;
 
-    set_led(LED_STATUS_RED);
-
     do {
         next_servo_step = current_servo_step + 1;
 
@@ -245,5 +243,4 @@ void tim1_cc_isr(void) {
     }
 
     timer_clear_flag(TIM1, TIM_SR_CC1IF);
-    clear_led(LED_STATUS_RED);
 }

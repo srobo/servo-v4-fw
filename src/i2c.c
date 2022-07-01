@@ -240,6 +240,7 @@ void reset_i2c_watchdog(void) {
     stop_i2c_watchdog();
     // clear flag
     i2c_watchdog_timed_out = false;
+    clear_led(LED_STATUS_RED);
 }
 
 void disable_i2c_watchdog(void) {
@@ -249,10 +250,14 @@ void disable_i2c_watchdog(void) {
 
     // stop counting
     timer_disable_counter(TIM2);
+
+    clear_led(LED_STATUS_RED);
 }
 
 void tim2_isr(void) {
     // watchdog tripped
     i2c_watchdog_timed_out = true;
     timer_clear_flag(TIM2, TIM_SR_UIF);
+
+    set_led(LED_STATUS_RED);
 }
