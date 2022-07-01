@@ -245,6 +245,15 @@ void reset_i2c_watchdog(void) {
     i2c_watchdog_timed_out = false;
 }
 
+void disable_i2c_watchdog(void) {
+    // disable irq
+    nvic_disable_irq(NVIC_TIM2_IRQ);
+    timer_disable_irq(TIM2, TIM_DIER_UIE);
+
+    // stop counting
+    timer_disable_counter(TIM2);
+}
+
 void tim2_isr(void) {
     i2c_watchdog_timed_out = true;
     timer_clear_flag(TIM2, TIM_SR_UIF);

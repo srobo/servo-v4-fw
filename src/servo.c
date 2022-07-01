@@ -71,6 +71,15 @@ void servo_init(void) {
     init_timer();
 }
 
+void servo_deinit(void) {
+    // disable irq
+    nvic_disable_irq(NVIC_TIM1_CC_IRQ);
+    timer_disable_irq(TIM1, TIM_DIER_CC1IE);
+
+    // stop counting
+    timer_disable_counter(TIM1);
+}
+
 void servo_set_pos(uint8_t idx, uint16_t pulse_us) {
     if (idx >= NUM_SERVOS) {
         return;

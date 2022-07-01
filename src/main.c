@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
+#include <libopencm3/cm3/systick.h>
 
 #include "cdcacm.h"
 #include "servo.h"
@@ -63,6 +64,11 @@ void init(void)
 
 void jump_to_bootloader(void)
 {
+    // Disable systick, TIM1 & TIM2 interrupts
+    systick_counter_disable();
+    disable_i2c_watchdog();
+    servo_deinit();
+
     // Actually wait for the usb peripheral to complete
     // it's acknowledgement to dfu_detach
     delay(20);
