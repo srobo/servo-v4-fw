@@ -38,6 +38,7 @@ int main(void)
         if (!processing_servo_pulses && !current_sense_updated) {
             get_expander_status(I2C_EXPANDER_ADDR);
             measure_current_sense(CURRENT_SENSE_ADDR);
+            current_sense_updated = true;
         }
         if (re_enter_bootloader) {
             jump_to_bootloader();

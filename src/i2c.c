@@ -153,6 +153,8 @@ void get_expander_status(uint8_t addr) {
     // if i2c timed out don't write to global values
     if (!i2c_watchdog_timed_out) {
         detected_power_good = (status & (1 << 7));
+    } else {
+        detected_power_good = false;
     }
 }
 
@@ -195,7 +197,6 @@ void measure_current_sense(uint8_t addr) {
         board_voltage_mv = volt_val;
         board_current_ma = curr_val;
     }
-    current_sense_updated = true;
 }
 
 void init_i2c_watchdog(void) {
