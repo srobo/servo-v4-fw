@@ -19,7 +19,7 @@ bool detected_power_good = false;
 int board_voltage_mv = 0;
 int board_current_ma = 0;
 
-bool current_sense_updated = true;
+volatile bool current_sense_updated = false;
 
 // ####
 

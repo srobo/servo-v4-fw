@@ -7,7 +7,7 @@
 
 #define I2C_EXIT_ON_WATCHDOG(x) if(i2c_watchdog_timed_out) {i2c_send_stop(I2C1); return x;}
 
-bool i2c_watchdog_timed_out = false;
+volatile bool i2c_watchdog_timed_out = false;
 
 void i2c_init(void){
     // Set I2C alternate functions on PB6 & PB7
