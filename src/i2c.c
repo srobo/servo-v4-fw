@@ -134,7 +134,7 @@ void init_expander(uint8_t addr){
 
     i2c_start_message(addr, I2C_WRITE);
     i2c_send_byte(EXT_GPIOA);
-    i2c_send_byte(0x20);  // SMPS_EN
+    i2c_send_byte(0x00);  // ~SMPS_EN
     i2c_stop_message();
 
     i2c_start_message(addr, I2C_WRITE);

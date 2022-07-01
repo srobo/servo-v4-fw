@@ -125,9 +125,8 @@ void servo_reset(void) {
 static void set_expander_output(uint16_t val) {
     // this uses an existing transaction with the expander in a special byte mode that
     // alternates between the AB register pairs to minimise the data sent over I2C
-    // mask in fixed values, SMPS_EN=1, LINK_EN=0
-    val &= 0xF7;
-    val |= (1 << 5);
+    // mask in fixed values, SMPS_EN=0, LINK_EN=0
+    val &= 0xFF9F;
     i2c_send_byte((uint8_t)(val & 0xff));  // A-reg first
     i2c_send_byte((uint8_t)((val >> 8) & 0xff));
 }
