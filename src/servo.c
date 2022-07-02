@@ -171,7 +171,7 @@ void start_servo_period(void) {
         return;
     }
     // setup transaction to GPIO register
-    i2c_start_message(0x21, I2C_WRITE);
+    i2c_start_message(0x21);
     i2c_send_byte(0x12);
     // set flag for processing servo pulses
     processing_servo_pulses = 1;
