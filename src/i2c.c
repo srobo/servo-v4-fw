@@ -256,7 +256,7 @@ void init_current_sense(uint8_t addr) {
 void measure_current_sense(uint8_t addr) {
     // Set register pointer to current register
     i2c_start_message(addr);
-    i2c_send_byte(0x05);
+    i2c_send_byte(0x04);
     i2c_stop_message();
 
     uint8_t val[2];
