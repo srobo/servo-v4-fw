@@ -2,12 +2,14 @@
 #include "led.h"
 #include "global_vars.h"
 
-#include <libopencm3/stm32/timer.h>
-#include <libopencm3/cm3/nvic.h>
+// A timed out I2C device will NACK after receiving a byte
+#define I2C_EXIT_ON_FAILED(x) if(i2c_timed_out) { return x;}
+#define I2C_FAIL_ON_NACK(x) if(I2C_SR1(I2C1) & I2C_SR1_AF) { \
+    i2c_timed_out = true; set_led(LED_STATUS_RED); \
+    if (I2C_SR2(I2C1) & I2C_SR2_BUSY) {i2c_send_stop(I2C1);} return x;}
 
-#define I2C_EXIT_ON_WATCHDOG(x) if(i2c_watchdog_timed_out) {if (I2C_SR2(I2C1) & I2C_SR2_BUSY) {i2c_send_stop(I2C1);} return x;}
 
-volatile bool i2c_watchdog_timed_out = false;
+volatile bool i2c_timed_out = false;
 
 void i2c_init(void){
     // Set I2C alternate functions on PB6 & PB7
@@ -27,23 +29,19 @@ void i2c_init(void){
     i2c_set_speed(I2C1, i2c_speed_fm_400k, 14);
 
     i2c_peripheral_enable(I2C1);
-    init_i2c_watchdog();
 }
 
 void i2c_start_message(uint8_t addr, uint8_t recv){
     uint32_t reg32 __attribute__((unused));
 
-    I2C_EXIT_ON_WATCHDOG();
-    start_i2c_watchdog();
+    I2C_EXIT_ON_FAILED();
 
     // Send START condition.
     i2c_send_start(I2C1);
 
     // Waiting for START to send and switch to master mode.
     while (!((I2C_SR1(I2C1) & I2C_SR1_SB)
-        && (I2C_SR2(I2C1) & (I2C_SR2_MSL | I2C_SR2_BUSY)))
-        && !i2c_watchdog_timed_out);
-    I2C_EXIT_ON_WATCHDOG();
+        && (I2C_SR2(I2C1) & (I2C_SR2_MSL | I2C_SR2_BUSY))));
 
     // Say to what address we want to talk to.
     i2c_send_7bit_address(I2C1, addr, recv);
@@ -54,44 +52,35 @@ void i2c_start_message(uint8_t addr, uint8_t recv){
     }
 
     // Waiting for address to transfer.
-    while (!(I2C_SR1(I2C1) & I2C_SR1_ADDR) && !i2c_watchdog_timed_out);
-    I2C_EXIT_ON_WATCHDOG();
+    while (!(I2C_SR1(I2C1) & (I2C_SR1_ADDR | I2C_SR1_AF)));
+    I2C_FAIL_ON_NACK();
 
     // Cleaning ADDR condition sequence.
     reg32 = I2C_SR2(I2C1);
-
-    stop_i2c_watchdog();
 }
 
 void i2c_stop_message(void){
-    I2C_EXIT_ON_WATCHDOG();
-    start_i2c_watchdog();
+    I2C_EXIT_ON_FAILED();
 
     // Wait for the data register to be empty or a NACK to be generated.
-    while (!(I2C_SR1(I2C1) & (I2C_SR1_TxE | I2C_SR1_AF)) && !i2c_watchdog_timed_out);
-    I2C_EXIT_ON_WATCHDOG();
+    while (!(I2C_SR1(I2C1) & (I2C_SR1_TxE | I2C_SR1_AF)));
+    I2C_FAIL_ON_NACK();  /// TODO Is a NACK expected here?
 
     // Send STOP condition.
     i2c_send_stop(I2C1);
-
-    stop_i2c_watchdog();
 }
 
 void i2c_send_byte(char c){
-    I2C_EXIT_ON_WATCHDOG();
-    start_i2c_watchdog();
+    I2C_EXIT_ON_FAILED();
 
     i2c_send_data(I2C1, c);
     // Wait for byte to complete transferring
-    while (!(I2C_SR1(I2C1) & I2C_SR1_BTF) && !i2c_watchdog_timed_out);
-    I2C_EXIT_ON_WATCHDOG();
-
-    stop_i2c_watchdog();
+    while (!(I2C_SR1(I2C1) & (I2C_SR1_BTF | I2C_SR1_AF)));
+    I2C_FAIL_ON_NACK();
 }
 
 char i2c_recv_byte(bool last_byte){
-    I2C_EXIT_ON_WATCHDOG(-1);
-    start_i2c_watchdog();
+    I2C_EXIT_ON_FAILED(-1);
 
     // Respond NACK to last byte
     if (last_byte) {
@@ -99,8 +88,9 @@ char i2c_recv_byte(bool last_byte){
     }
 
     // Wait for the receive register to not be empty
-    while (!(I2C_SR1(I2C1) & I2C_SR1_RxNE) && !i2c_watchdog_timed_out);
-    I2C_EXIT_ON_WATCHDOG(-1);
+    while (!(I2C_SR1(I2C1) & (I2C_SR1_RxNE | I2C_SR1_AF)));
+    I2C_FAIL_ON_NACK(-1);
+
     char res = i2c_get_data(I2C1);
 
     // End the transmission
@@ -108,7 +98,6 @@ char i2c_recv_byte(bool last_byte){
         i2c_send_stop(I2C1);
     }
 
-    stop_i2c_watchdog();
     return res;
 }
 
@@ -151,7 +140,7 @@ void get_expander_status(uint8_t addr) {
     uint8_t status = i2c_recv_byte(true);
 
     // if i2c timed out don't write to global values
-    if (!i2c_watchdog_timed_out) {
+    if (!i2c_timed_out) {
         detected_power_good = (status & (1 << 7));
     } else {
         detected_power_good = false;
@@ -193,72 +182,19 @@ void measure_current_sense(uint8_t addr) {
     volt_val >>= 1;  // rshift to get 1mV/bit
 
     // if i2c timed out don't write to global values
-    if (!i2c_watchdog_timed_out) {
+    if (!i2c_timed_out) {
         board_voltage_mv = volt_val;
         board_current_ma = curr_val;
     }
 }
 
-void init_i2c_watchdog(void) {
-    // We use a timer to emulate a watchdog because we only want to
-    // reset the I2C comms not fully reset the MCU
-
-    // Enable interrupts from TIM2 with very high priority
-    nvic_enable_irq(NVIC_TIM2_IRQ);
-    nvic_set_priority(NVIC_TIM2_IRQ, 1);
-
-    // Enable TIM2 clock
-    rcc_periph_clock_enable(RCC_TIM2);
-
-    // Set timer prescaler. 72MHz/7200 => 10000 counts per second.
-    timer_set_prescaler(TIM2, 7200);
-
-    // End timer value. If this is reached an interrupt is generated.
-    // Watchdog duration set to 10ms
-    timer_set_period(TIM2, 100);
-
-    // Set timer start value.
-    timer_set_counter(TIM2, 0);
-
-    // Enable interrupt on overflow
-    timer_enable_irq(TIM2, TIM_DIER_UIE);
-}
-
-void start_i2c_watchdog(void) {
-    // set timer val to 0
-    timer_set_counter(TIM2, 0);
-    // start counting
-    timer_enable_counter(TIM2);
-}
-
-void stop_i2c_watchdog(void) {
-    // stop counting
-    timer_disable_counter(TIM2);
-}
-
 void reset_i2c_watchdog(void) {
-    // stop watchdog
-    stop_i2c_watchdog();
     // clear flag
-    i2c_watchdog_timed_out = false;
-    clear_led(LED_STATUS_RED);
-}
+    i2c_timed_out = false;
 
-void disable_i2c_watchdog(void) {
-    // disable irq
-    nvic_disable_irq(NVIC_TIM2_IRQ);
-    timer_disable_irq(TIM2, TIM_DIER_UIE);
-
-    // stop counting
-    timer_disable_counter(TIM2);
+    // Disable and re-enable I2C to clear status bits
+    I2C_CR1(I2C1) &= ~I2C_CR1_PE;
+    I2C_CR1(I2C1) |= I2C_CR1_PE;
 
     clear_led(LED_STATUS_RED);
-}
-
-void tim2_isr(void) {
-    // watchdog tripped
-    i2c_watchdog_timed_out = true;
-    timer_clear_flag(TIM2, TIM_SR_UIF);
-
-    set_led(LED_STATUS_RED);
 }

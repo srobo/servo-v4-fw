@@ -67,7 +67,6 @@ void jump_to_bootloader(void)
 {
     // Disable systick, TIM1 & TIM2 interrupts
     systick_counter_disable();
-    disable_i2c_watchdog();
     servo_deinit();
 
     // Actually wait for the usb peripheral to complete

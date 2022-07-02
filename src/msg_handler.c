@@ -101,7 +101,7 @@ int parse_msg(char* buf, char* response, int max_len)
         strncat(response, FW_VER, max_len - strlen(response));
         return strlen(response);
     } else if (strcmp(next_arg, "STATUS") == 0) {
-        strncat(response, i2c_watchdog_timed_out ? "1" : "0", max_len);  // watchdog failed
+        strncat(response, i2c_timed_out ? "1" : "0", max_len);  // I2C is timed out
         strncat(response, ":", max_len - strlen(response));
         strncat(response, detected_power_good ? "1" : "0", max_len - strlen(response));  // power good
         return strlen(response);

@@ -27,7 +27,7 @@ void sys_tick_handler(void) {
     // Every 20 ms start servo pulse
     if (++systick_servo_tick == 20) {
         // if watchdog tripped re-init expander
-        if (i2c_watchdog_timed_out) {
+        if (i2c_timed_out) {
             // reset watchdog
             reset_i2c_watchdog();
             init_expander(I2C_EXPANDER_ADDR);
