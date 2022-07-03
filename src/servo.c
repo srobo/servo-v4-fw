@@ -28,7 +28,7 @@ typedef struct {
     uint16_t pulse;  // in timer ticks
 } servo_t;
 
-static servo_t servo_state[NUM_SERVOS] = {};
+static volatile servo_t servo_state[NUM_SERVOS] = {};
 // loaded from servo_state at the end of each period
 static servo_t current_servo_state[NUM_SERVOS] = {};
 
@@ -171,8 +171,16 @@ void start_servo_period(void) {
     if (current_servo_state[0].enabled == false) {
         return;
     }
+
+    // Set expander into byte/bank mode to alternate between GPIOA and GPIOB
+    const uint8_t IOCON = 0x0A;
+    i2c_start_message(I2C_EXPANDER_ADDR);
+    i2c_send_byte(IOCON);
+    i2c_send_byte(1 << 5);  // SEQOP=1, BANK=0
+    i2c_stop_message();
+
     // setup transaction to GPIO register
-    i2c_start_message(0x21);
+    i2c_start_message(I2C_EXPANDER_ADDR);
     i2c_send_byte(0x12);
     // set flag for processing servo pulses
     processing_servo_pulses = 1;
