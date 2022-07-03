@@ -142,6 +142,7 @@ static void load_servo_state(void) {
     servo_t inactive_servos[NUM_SERVOS];
     uint8_t num_active = 0;
     uint8_t num_inactive = 0;
+    servo_t* state_ptr = current_servo_state;
 
     // split out active servos
     for (uint8_t i = 0; i < NUM_SERVOS; i++) {
@@ -154,12 +155,17 @@ static void load_servo_state(void) {
         }
     }
 
-    // sort active servos into ascending order of pulse
-    qsort(active_servos, num_active, sizeof(servo_t), compare_servos);
+    if (num_active > 0) {
+        // sort active servos into ascending order of pulse
+        qsort(active_servos, num_active, sizeof(servo_t), compare_servos);
 
-    // store in current_servo_state
-    memcpy(current_servo_state, active_servos, sizeof(servo_t) * num_active);
-    memcpy(&(current_servo_state[num_active+1]), inactive_servos, sizeof(servo_t) * num_inactive);
+        // store in current_servo_state
+        memcpy(state_ptr, active_servos, sizeof(servo_t) * num_active);
+        state_ptr += num_active;
+    }
+    if (num_inactive > 0) {
+        memcpy(state_ptr, inactive_servos, sizeof(servo_t) * num_inactive);
+    }
 }
 
 void start_servo_period(void) {
