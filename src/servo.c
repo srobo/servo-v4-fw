@@ -24,7 +24,7 @@ volatile uint8_t processing_servo_pulses = 0;
 
 typedef struct {
     uint8_t idx;
-    uint8_t enabled;
+    bool enabled;
     uint16_t pulse;  // in timer ticks
 } servo_t;
 
@@ -65,6 +65,7 @@ void servo_init(void) {
     // initialise servo state indexes
     for (uint8_t i = 0; i < NUM_SERVOS; i++) {
         servo_state[i].idx = i;
+        servo_state[i].enabled = false;
     }
 
     // setup timer
@@ -92,7 +93,7 @@ void servo_set_pos(uint8_t idx, uint16_t pulse_us) {
     }
 
     // servos are automatically enabled when they are set
-    servo_state[idx].enabled = 1;
+    servo_state[idx].enabled = true;
     set_led(idx);
     servo_state[idx].pulse = US_TO_TICK(pulse_us);
 }
@@ -102,17 +103,17 @@ void servo_disable(uint8_t idx) {
         return;
     }
     clear_led(idx);
-    servo_state[idx].enabled = 0;
+    servo_state[idx].enabled = false;
 }
 
 uint16_t servo_get_pos(uint8_t idx) {
     if (idx >= NUM_SERVOS) {
         return -1;
     }
-    if (servo_state[idx].enabled == 0) {
-        return 0;
-    } else {
+    if (servo_state[idx].enabled) {
         return TICK_TO_US(servo_state[idx].pulse);
+    } else {
+        return 0;
     }
 }
 
@@ -167,7 +168,7 @@ void start_servo_period(void) {
     load_servo_state();
     current_servo_step = 0;
     // if all servos are disabled
-    if (current_servo_state[0].enabled == 0) {
+    if (current_servo_state[0].enabled == false) {
         return;
     }
     // setup transaction to GPIO register
@@ -205,7 +206,7 @@ void tim1_cc_isr(void) {
 
         // multiple servos may be set to the same value, set all the bits together
         while (current_servo_state[next_servo_step].pulse <= (current_servo_state[current_servo_step].pulse + US_TO_TICK(20))) {
-            if (current_servo_state[next_servo_step].enabled == 0) {
+            if (current_servo_state[next_servo_step].enabled == false) {
                 break;
             }
             // set current servo bit low (high pulse complete)
@@ -218,7 +219,7 @@ void tim1_cc_isr(void) {
         // write bit val to expander
         set_expander_output(current_pin_state);
 
-        if ((current_servo_state[next_servo_step].enabled == 0) || (next_servo_step >= NUM_SERVOS)) {
+        if ((current_servo_state[next_servo_step].enabled == false) || (next_servo_step >= NUM_SERVOS)) {
             break;
         }
 
@@ -228,7 +229,7 @@ void tim1_cc_isr(void) {
     } while ((uint16_t)(current_servo_state[next_servo_step].pulse + 1) > timer_get_counter(TIM1));
 
     // completed all active servos
-    if(current_servo_state[next_servo_step].enabled == 0 || next_servo_step >= NUM_SERVOS) {
+    if(current_servo_state[next_servo_step].enabled == false || next_servo_step >= NUM_SERVOS) {
         // disable timer interrupt
         timer_disable_irq(TIM1, TIM_DIER_CC1IE);
         // clear flag for processing servo pulses
