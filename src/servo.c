@@ -42,19 +42,14 @@ static void init_timer(void) {
     // Reset TIM1 peripheral.
 	rcc_periph_reset_pulse(RST_TIM1);
 
+    timer_disable_preload(TIM1);
     // Up counting, edge triggered no divider
     timer_set_mode(TIM1, TIM_CR1_CKD_CK_INT, TIM_CR1_CMS_EDGE, TIM_CR1_DIR_UP);
     timer_set_prescaler(TIM1, 360);  // 200kHz
-    timer_set_period(TIM1, 200000 / 50);  // 50 Hz
+    timer_set_period(TIM1, UINT16_MAX);
     timer_continuous_mode(TIM1);
-    timer_disable_preload(TIM1);
 
-    // Don't alter output on compare match
-    timer_set_oc_mode(TIM1, TIM_OC1, TIM_OCM_FROZEN);
     timer_enable_oc_preload(TIM1, TIM_OC1);
-
-    // Start counting
-    timer_enable_counter(TIM1);
 }
 
 void servo_init(void) {
@@ -190,8 +185,6 @@ void start_servo_period(void) {
     i2c_send_byte(0x12);
     // set flag for processing servo pulses
     processing_servo_pulses = 1;
-    // set compare to first servo pulse
-    timer_set_oc_value(TIM1, TIM_OC1, current_servo_state[0].pulse);
     // set all enabled servo bits high
     current_pin_state = 0x0000;
     for (uint8_t i = 0; i < NUM_SERVOS; i++) {
@@ -201,10 +194,16 @@ void start_servo_period(void) {
     }
     // set timer val to 0
     timer_set_counter(TIM1, 0);
+    // set compare to first servo pulse
+    timer_set_oc_value(TIM1, TIM_OC1, current_servo_state[0].pulse);
+    // load compare value
+    timer_generate_event(TIM1, TIM_EGR_UG);
     // write bit val to expander
     set_expander_output(current_pin_state);
     // enable timer interrupt
     timer_enable_irq(TIM1, TIM_DIER_CC1IE);
+    // Start counting
+    timer_enable_counter(TIM1);
 }
 
 void tim1_cc_isr(void) {
@@ -246,6 +245,8 @@ void tim1_cc_isr(void) {
     if(current_servo_state[next_servo_step].enabled == false || next_servo_step >= NUM_SERVOS) {
         // disable timer interrupt
         timer_disable_irq(TIM1, TIM_DIER_CC1IE);
+        // stop counting
+        timer_disable_counter(TIM1);
         // clear flag for processing servo pulses
         processing_servo_pulses = 0;
         // stop expander transaction
@@ -254,6 +255,8 @@ void tim1_cc_isr(void) {
     } else {
         // set the timer compare to the next servo pulse end
         timer_set_oc_value(TIM1, TIM_OC1, current_servo_state[next_servo_step].pulse);
+        // load compare value
+        timer_generate_event(TIM1, TIM_EGR_UG);
     }
 
     timer_clear_flag(TIM1, TIM_SR_CC1IF);
