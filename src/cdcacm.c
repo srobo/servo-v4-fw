@@ -164,8 +164,8 @@ const struct usb_interface_descriptor dfu_iface[] = {{
     .bInterfaceSubClass = 0x01, // DFU
     .bInterfaceProtocol = 0x01, // Protocol 1.0
     .iInterface = 5,
-	.extra = &sr_dfu_function,
-	.extralen = sizeof(sr_dfu_function),
+    .extra = &sr_dfu_function,
+    .extralen = sizeof(sr_dfu_function),
 }};
 
 static const struct usb_interface ifaces[] = {{

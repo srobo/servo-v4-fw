@@ -25,7 +25,7 @@ MEMORY
 {
 	/* Skip first 8k for bootloader */
 	rom (rx) : ORIGIN = 0x08002000, LENGTH = 24K
-	ram (rwx) : ORIGIN = 0x20000000, LENGTH = 20K
+	ram (rwx) : ORIGIN = 0x20000000, LENGTH = 10K
 }
 
 /* Force linking of application main function */
