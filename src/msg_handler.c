@@ -63,7 +63,7 @@ int parse_msg(char* buf, char* response, int max_len)
             int servo_val = atoi(next_arg);
 
             // bounds check
-            if (servo_val < 0 || servo_val > UINT16_MAX) {
+            if (servo_val < MIN_SERVO_PULSE || servo_val > MAX_SERVO_PULSE) {
                 strncat(response, "NACK:Invalid servo setpoint", max_len);
                 return strlen(response);
             }
@@ -86,12 +86,12 @@ int parse_msg(char* buf, char* response, int max_len)
             strncat(response, "NACK:Unknown servo command", max_len);
             return strlen(response);
         }
-    } else if (strcmp(next_arg, "RESET") == 0) {
+    } else if (strcmp(next_arg, "*RESET") == 0) {
         servo_reset();
 
         strncat(response, "ACK", max_len);
         return strlen(response);
-    } else if (strcmp(next_arg, "IDN") == 0) {
+    } else if (strcmp(next_arg, "*IDN?") == 0) {
         // Identifier string: manufacturer, board name, asset tag, version
         strncat(response, "Student Robotics:", max_len);
         strncat(response, BOARD_NAME_SHORT, max_len - strlen(response));
@@ -100,7 +100,7 @@ int parse_msg(char* buf, char* response, int max_len)
         strncat(response, ":", max_len - strlen(response));
         strncat(response, FW_VER, max_len - strlen(response));
         return strlen(response);
-    } else if (strcmp(next_arg, "STATUS") == 0) {
+    } else if (strcmp(next_arg, "*STATUS?") == 0) {
         strncat(response, i2c_timed_out ? "1" : "0", max_len);  // I2C is timed out
         strncat(response, ":", max_len - strlen(response));
         strncat(response, detected_power_good ? "1" : "0", max_len - strlen(response));  // power good

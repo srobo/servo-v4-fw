@@ -12,10 +12,6 @@
 #define US_TO_TICK(x) ((uint16_t)x / 5)
 #define TICK_TO_US(x) (x * 5)
 
-// in uS
-#define MIN_SERVO_PULSE 200
-#define MAX_SERVO_PULSE 10000
-
 static const uint8_t servo_bit_mapping[] = {15, 14, 13, 12, 11, 10, 9, 8, 0, 1, 2, 3};
 
 static volatile uint16_t current_pin_state = 0x0000;
