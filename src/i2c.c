@@ -233,7 +233,7 @@ void get_expander_status(uint8_t addr) {
     bool success = i2c_recv_bytes(addr, &status, 1);  // w/ repeated start bit
 
     // if i2c timed out don't write to global values
-    if (!i2c_timed_out || !success) {
+    if (!i2c_timed_out && success) {
         detected_power_good = (status & (1 << 7));
     } else {
         detected_power_good = false;
@@ -272,10 +272,11 @@ void measure_current_sense(uint8_t addr) {
 
     bool v_success = i2c_recv_bytes(addr, val, 2);
     int16_t volt_val = (int16_t)(((uint16_t)val[0] << 8) | ((uint16_t)val[1] & 0xff));
+    volt_val &= 0xfff8;  // mask status bits
     volt_val >>= 1;  // rshift to get 1mV/bit
 
     // if i2c timed out don't write to global values
-    if (!i2c_timed_out || !i_success || !v_success) {
+    if (!i2c_timed_out && i_success && v_success) {
         board_voltage_mv = volt_val;
         board_current_ma = curr_val;
     }
