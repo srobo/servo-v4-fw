@@ -44,8 +44,6 @@ static void init_timer(void) {
     timer_set_prescaler(TIM1, 360);  // 200kHz
     timer_set_period(TIM1, UINT16_MAX);
     timer_continuous_mode(TIM1);
-
-    timer_enable_oc_preload(TIM1, TIM_OC1);
 }
 
 void servo_init(void) {
@@ -192,8 +190,6 @@ void start_servo_period(void) {
     timer_set_counter(TIM1, 0);
     // set compare to first servo pulse
     timer_set_oc_value(TIM1, TIM_OC1, current_servo_state[0].pulse);
-    // load compare value
-    timer_generate_event(TIM1, TIM_EGR_UG);
     // write bit val to expander
     set_expander_output(current_pin_state);
     // enable timer interrupt
@@ -251,8 +247,6 @@ void tim1_cc_isr(void) {
     } else {
         // set the timer compare to the next servo pulse end
         timer_set_oc_value(TIM1, TIM_OC1, current_servo_state[next_servo_step].pulse);
-        // load compare value
-        timer_generate_event(TIM1, TIM_EGR_UG);
     }
 
     timer_clear_flag(TIM1, TIM_SR_CC1IF);
