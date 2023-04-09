@@ -2,6 +2,7 @@
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/cm3/systick.h>
+#include <libopencm3/stm32/iwdg.h>
 
 #include "cdcacm.h"
 #include "servo.h"
@@ -9,8 +10,6 @@
 #include "systick.h"
 #include "global_vars.h"
 #include "i2c.h"
-
-#define REENTER_BOOTLOADER_RENDEZVOUS	0x08001FFC
 
 // ## Global variable defines ##
 // externs in global_vars.h
@@ -26,10 +25,10 @@ volatile bool current_sense_updated = false;
 void init(void);
 void jump_to_bootloader(void);
 
-int main(void)
-{
+int main(void) {
     init();
 
+    // Signal we initialised
     set_led(LED_STATUS_BLUE);
 
     while (1) {
@@ -37,17 +36,22 @@ int main(void)
         // measure servo current in dead-time after all pulses
         if (!processing_servo_pulses && !current_sense_updated) {
             get_expander_status(I2C_EXPANDER_ADDR);
-            measure_current_sense(CURRENT_SENSE_ADDR);
+            INA219_meas_t res = measure_current_sense(CURRENT_SENSE_ADDR);
+            if (res.success) {
+                board_voltage_mv = res.voltage;
+                board_current_ma = res.current;
+            }
             current_sense_updated = true;
         }
         if (re_enter_bootloader) {
             jump_to_bootloader();
         }
+        // Reset watchdog after successfully Doing Things
+        iwdg_reset();
     }
 }
 
-void init(void)
-{
+void init(void) {
     rcc_clock_setup_pll(&rcc_hse_configs[RCC_CLOCK_HSE8_72MHZ]);
 
     rcc_periph_clock_enable(RCC_GPIOA);
@@ -58,20 +62,24 @@ void init(void)
 
     led_init();
     usb_init();
+    i2c_init();
+    init_i2c_devices(true);
     servo_init();
-    init_current_sense(CURRENT_SENSE_ADDR);
     systick_init();
+
+    // Configure watchdog. Period: 50ms
+    iwdg_set_period_ms(50);
+    iwdg_start();
 }
 
-void jump_to_bootloader(void)
-{
+void jump_to_bootloader(void) {
     // Disable systick, TIM1 & TIM2 interrupts
     systick_counter_disable();
     servo_deinit();
 
     // Actually wait for the usb peripheral to complete
     // it's acknowledgement to dfu_detach
-    delay(20);
+    delay(1);
     // Now reset USB
     usb_deinit();
     // Call back into bootloader
@@ -83,8 +91,7 @@ void jump_to_bootloader(void)
 // libopencm3's reset handler, this copies .data into sram.
 extern void *vector_table;
 extern __attribute__((naked)) void reset_handler(void);
-uint32_t app_start_address[3] __attribute__((section(".startup"))) =
-{
+uint32_t app_start_address[3] __attribute__((section(".startup"))) = {
     (uint32_t)&vector_table,
     (uint32_t)&reset_handler,
     (uint32_t)0x00000000,  // CRC checksum of the compiled binary

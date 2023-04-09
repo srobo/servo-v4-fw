@@ -47,10 +47,6 @@ static void init_timer(void) {
 }
 
 void servo_init(void) {
-    // configure i2c expander
-    i2c_init();
-    init_expander(I2C_EXPANDER_ADDR);
-
     // initialise servo state indexes
     for (uint8_t i = 0; i < NUM_SERVOS; i++) {
         servo_state[i].idx = i;

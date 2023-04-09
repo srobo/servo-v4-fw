@@ -28,7 +28,6 @@ def calculate_stm32_crc(data):
         - bit invert the result as an unsigned number
         from https://community.st.com/s/question/0D50X00009XkbXeSAJ/crc32-calculation-mismatch (post 3)
     """
-    # TODO test if data len is a multiple of 4
     words = len(data) / 4
 
     if not words.is_integer():

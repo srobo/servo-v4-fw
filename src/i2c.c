@@ -2,16 +2,25 @@
 #include "led.h"
 #include "global_vars.h"
 
+// AF bit is set when a byte transfer ends with a NACK
+static inline bool nack_recieved(void) {return I2C_SR1(I2C1) & I2C_SR1_AF;}
+static inline bool i2c_transaction_in_progress(void) {return I2C_SR2(I2C1) & I2C_SR2_BUSY;}
+
 // A timed out I2C device will NACK after receiving a byte
-#define I2C_EXIT_ON_FAILED(x) if(i2c_timed_out) { return x;}
-#define I2C_FAIL_ON_NACK(x) if(I2C_SR1(I2C1) & I2C_SR1_AF) { \
-    i2c_timed_out = true; set_led(LED_STATUS_RED); \
-    if (I2C_SR2(I2C1) & I2C_SR2_BUSY) {i2c_send_stop(I2C1);} return x;}
+#define I2C_RETURN_IF_FAILED(x) if(i2c_timed_out) { return x;}
+// The I2C protocol means that every transfer will end with either a NACK or ACK
+// The ACK requires the slave device to be actively participating in the transaction
+#define I2C_FAIL_AND_RETURN_ON_NACK(x) if(nack_recieved()) { \
+    i2c_timed_out = true; \
+    if (i2c_transaction_in_progress()) {i2c_send_stop(I2C1);} return x;}
 
 
 volatile bool i2c_timed_out = false;
 
-void i2c_init(void){
+// this is an array to cover the 16 configurable addresses of INA219s
+int16_t ina219_offsets[16] = {0};
+
+void i2c_init(void) {
     // Set I2C alternate functions on PB6 & PB7
     gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_50_MHZ,
               GPIO_CNF_OUTPUT_ALTFN_PUSHPULL, GPIO_I2C1_SCL);
@@ -31,10 +40,10 @@ void i2c_init(void){
     i2c_peripheral_enable(I2C1);
 }
 
-void i2c_start_message(uint8_t addr){
+void i2c_start_message(uint8_t addr) {
     uint32_t reg32 __attribute__((unused));
 
-    I2C_EXIT_ON_FAILED();
+    I2C_RETURN_IF_FAILED();
 
     // Send START condition.
     i2c_send_start(I2C1);
@@ -48,35 +57,35 @@ void i2c_start_message(uint8_t addr){
 
     // Waiting for address to transfer.
     while (!(I2C_SR1(I2C1) & (I2C_SR1_ADDR | I2C_SR1_AF)));
-    I2C_FAIL_ON_NACK();
+    I2C_FAIL_AND_RETURN_ON_NACK();
 
     // Cleaning ADDR condition sequence.
     reg32 = I2C_SR2(I2C1);
 }
 
-void i2c_stop_message(void){
-    I2C_EXIT_ON_FAILED();
+void i2c_stop_message(void) {
+    I2C_RETURN_IF_FAILED();
 
     // Wait for the data register to be empty or a NACK to be generated.
     while (!(I2C_SR1(I2C1) & (I2C_SR1_TxE | I2C_SR1_AF)));
-    I2C_FAIL_ON_NACK();  /// TODO Is a NACK expected here?
+    I2C_FAIL_AND_RETURN_ON_NACK();  /// TODO Is a NACK expected here?
 
     // Send STOP condition.
     i2c_send_stop(I2C1);
 }
 
-void i2c_send_byte(char c){
-    I2C_EXIT_ON_FAILED();
+void i2c_send_byte(char c) {
+    I2C_RETURN_IF_FAILED();
 
     i2c_send_data(I2C1, c);
     // Wait for byte to complete transferring
     while (!(I2C_SR1(I2C1) & (I2C_SR1_BTF | I2C_SR1_AF)));
-    I2C_FAIL_ON_NACK();
+    I2C_FAIL_AND_RETURN_ON_NACK();
 }
 
 bool i2c_recv_bytes(uint8_t addr, uint8_t* buf, uint8_t len) {
     uint32_t reg32 __attribute__((unused));
-    I2C_EXIT_ON_FAILED(false);
+    I2C_RETURN_IF_FAILED(false);
 
     if (len == 0) {
         return false;
@@ -98,7 +107,7 @@ bool i2c_recv_bytes(uint8_t addr, uint8_t* buf, uint8_t len) {
 
         // Waiting for address to transfer.
         while (!(I2C_SR1(I2C1) & (I2C_SR1_ADDR | I2C_SR1_AF)));
-        I2C_FAIL_ON_NACK(false);
+        I2C_FAIL_AND_RETURN_ON_NACK(false);
 
         // Clear ADDR
         reg32 = I2C_SR2(I2C1);
@@ -107,7 +116,7 @@ bool i2c_recv_bytes(uint8_t addr, uint8_t* buf, uint8_t len) {
 
         // Read the data after the RxNE flag is set.
         while (!(I2C_SR1(I2C1) & (I2C_SR1_RxNE | I2C_SR1_AF)));
-        I2C_FAIL_ON_NACK(false);
+        I2C_FAIL_AND_RETURN_ON_NACK(false);
 
         buf[0] = i2c_get_data(I2C1);
     } else if (len == 2) {
@@ -117,7 +126,7 @@ bool i2c_recv_bytes(uint8_t addr, uint8_t* buf, uint8_t len) {
 
         // Waiting for address to transfer.
         while (!(I2C_SR1(I2C1) & (I2C_SR1_ADDR | I2C_SR1_AF)));
-        I2C_FAIL_ON_NACK(false);
+        I2C_FAIL_AND_RETURN_ON_NACK(false);
 
         // Clear ADDR
         reg32 = I2C_SR2(I2C1);
@@ -127,7 +136,7 @@ bool i2c_recv_bytes(uint8_t addr, uint8_t* buf, uint8_t len) {
 
         // Wait for BTF to be set
         while (!(I2C_SR1(I2C1) & (I2C_SR1_BTF | I2C_SR1_AF)));
-        I2C_FAIL_ON_NACK(false);
+        I2C_FAIL_AND_RETURN_ON_NACK(false);
 
         // Program STOP
         i2c_send_stop(I2C1);
@@ -140,10 +149,11 @@ bool i2c_recv_bytes(uint8_t addr, uint8_t* buf, uint8_t len) {
         while (I2C_SR2(I2C1) & I2C_SR2_BUSY);
         // Reset NACK control
         i2c_nack_current(I2C1);
-    } else {
+    } else {  /// TODO this locks up
+        // this clause is unused by the code but is added for completeness when doing I2C transactions over 2 bytes long
         // Waiting for address to transfer.
         while (!(I2C_SR1(I2C1) & (I2C_SR1_ADDR | I2C_SR1_AF)));
-        I2C_FAIL_ON_NACK(false);
+        I2C_FAIL_AND_RETURN_ON_NACK(false);
 
         uint8_t rem;
         for (uint8_t i=0; i<len; i++) {
@@ -151,10 +161,10 @@ bool i2c_recv_bytes(uint8_t addr, uint8_t* buf, uint8_t len) {
             if (rem == 3) {
                 // Wait for DataN-2 to be received (RxNE = 1)
                 while (!(I2C_SR1(I2C1) & (I2C_SR1_RxNE | I2C_SR1_AF)));
-                I2C_FAIL_ON_NACK(false);
+                I2C_FAIL_AND_RETURN_ON_NACK(false);
                 // Wait for DataN-1 to be received (BTF = 1)
                 while (!(I2C_SR1(I2C1) & (I2C_SR1_BTF | I2C_SR1_AF)));
-                I2C_FAIL_ON_NACK(false);
+                I2C_FAIL_AND_RETURN_ON_NACK(false);
 
                 // Now DataN-2 is in DR and DataN-1 is in the shift register
                 // Clear ACK bit
@@ -168,21 +178,21 @@ bool i2c_recv_bytes(uint8_t addr, uint8_t* buf, uint8_t len) {
 
                 // Wait for the receive register to not be empty
                 while (!(I2C_SR1(I2C1) & (I2C_SR1_RxNE | I2C_SR1_AF)));
-                I2C_FAIL_ON_NACK(false);
+                I2C_FAIL_AND_RETURN_ON_NACK(false);
 
                 // read byte from DR (DataN-1)
                 buf[i] = i2c_get_data(I2C1);
             } else if (rem == 1) {
                 // Wait for the receive register to not be empty
                 while (!(I2C_SR1(I2C1) & (I2C_SR1_RxNE | I2C_SR1_AF)));
-                I2C_FAIL_ON_NACK(false);
+                I2C_FAIL_AND_RETURN_ON_NACK(false);
 
                 // read byte from DR (DataN)
                 buf[i] = i2c_get_data(I2C1);
             } else {
                 // Wait for the receive register to not be empty
                 while (!(I2C_SR1(I2C1) & (I2C_SR1_RxNE | I2C_SR1_AF)));
-                I2C_FAIL_ON_NACK(false);
+                I2C_FAIL_AND_RETURN_ON_NACK(false);
 
                 // read byte from DR
                 buf[i] = i2c_get_data(I2C1);
@@ -240,21 +250,7 @@ void get_expander_status(uint8_t addr) {
     }
 }
 
-void init_current_sense(uint8_t addr) {
-    #define I_SHUNT_RES 0.003
-    #define I_SENSE_LSB 0.001
-
-    uint16_t cal_val = (uint16_t)(0.04096/(I_SHUNT_RES * I_SENSE_LSB));
-
-    // Program calibration reg (0x05) w/ shunt value
-    i2c_start_message(addr);
-    i2c_send_byte(0x05);  // calibration reg address
-    i2c_send_byte((uint8_t)((cal_val >> 8) & 0xff));
-    i2c_send_byte((uint8_t)(cal_val & 0xff));
-    i2c_stop_message();
-}
-
-void measure_current_sense(uint8_t addr) {
+static void set_current_offset_value(uint8_t addr) {
     // Set register pointer to current register
     i2c_start_message(addr);
     i2c_send_byte(0x04);
@@ -263,7 +259,56 @@ void measure_current_sense(uint8_t addr) {
     uint8_t val[2];
     bool i_success = i2c_recv_bytes(addr, val, 2);
 
-    int16_t curr_val = (int16_t)(((uint16_t)val[0] << 8) | ((uint16_t)val[1] & 0xff));
+    if (!i_success) {
+        return;
+    }
+
+    int16_t current = (int16_t)(((uint16_t)val[0] << 8) | ((uint16_t)val[1] & 0xff));
+
+    ina219_offsets[addr & 0xf] = current;
+}
+
+static int16_t get_current_offset_value(uint8_t addr) {
+    // lookup offset with matching address
+    return ina219_offsets[addr & 0xf];
+}
+
+void init_i2c_devices(bool calc_offset) {
+    init_expander(I2C_EXPANDER_ADDR);
+    init_current_sense(CURRENT_SENSE_ADDR, I_CAL_VAL(0.003), INA219_CONF(0b11, 0b1100), calc_offset);
+}
+
+void init_current_sense(uint8_t addr, uint16_t cal_val, uint16_t conf_val, bool calc_offset) {
+    // Program calibration reg (0x05) w/ shunt value
+    i2c_start_message(addr);
+    i2c_send_byte(0x05);  // calibration reg address
+    i2c_send_byte((uint8_t)((cal_val >> 8) & 0xff));
+    i2c_send_byte((uint8_t)(cal_val & 0xff));
+    i2c_start_message(addr);
+    i2c_send_byte(0x00);  // configuration reg address
+    i2c_send_byte((uint8_t)((conf_val >> 8) & 0xff));
+    i2c_send_byte((uint8_t)(conf_val & 0xff));
+    i2c_stop_message();
+    if (calc_offset) {
+        // wait for a measurement to be made
+        delay(10);
+        set_current_offset_value(addr);
+    }
+}
+
+INA219_meas_t measure_current_sense(uint8_t addr) {
+    // Set register pointer to current register
+    i2c_start_message(addr);
+    i2c_send_byte(0x04);
+    i2c_stop_message();
+
+    INA219_meas_t res = {0};
+
+    uint8_t val[2];
+    bool i_success = i2c_recv_bytes(addr, val, 2);
+
+    res.current = (int16_t)(((uint16_t)val[0] << 8) | ((uint16_t)val[1] & 0xff));
+    res.current -= get_current_offset_value(addr);
 
     // Set register pointer to voltage register
     i2c_start_message(addr);
@@ -271,15 +316,14 @@ void measure_current_sense(uint8_t addr) {
     i2c_stop_message();
 
     bool v_success = i2c_recv_bytes(addr, val, 2);
-    int16_t volt_val = (int16_t)(((uint16_t)val[0] << 8) | ((uint16_t)val[1] & 0xff));
-    volt_val &= 0xfff8;  // mask status bits
-    volt_val >>= 1;  // rshift to get 1mV/bit
+    res.voltage = (int16_t)(((uint16_t)val[0] << 8) | ((uint16_t)val[1] & 0xff));
+    res.voltage &= 0xfff8;  // mask status bits
+    res.voltage >>= 1;  // rshift to get 1mV/bit
 
-    // if i2c timed out don't write to global values
-    if (!i2c_timed_out && i_success && v_success) {
-        board_voltage_mv = volt_val;
-        board_current_ma = curr_val;
-    }
+    // did i2c timeout during the transaction?
+    res.success = (!i2c_timed_out && i_success && v_success);
+
+    return res;
 }
 
 void reset_i2c_watchdog(void) {

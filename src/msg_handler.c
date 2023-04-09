@@ -9,122 +9,125 @@
 
 static char* itoa(int value, char* string);
 
-int parse_msg(char* buf, char* response, int max_len)
-{
-    char temp_str[11] = {0};
+static void append_str(char* dest, const char* src, int dest_max_len) {
+    strncat(dest, src, dest_max_len - strlen(dest));
+}
+static char* get_next_arg(char* response, const char* err_msg, int max_len) {
+    char* next_arg = strtok(NULL, ":");
+    if (next_arg == NULL) {
+        strncat(response, err_msg, max_len);
+        return NULL;
+    }
+    return next_arg;
+}
+
+void handle_msg(char* buf, char* response, int max_len) {
+    // max_len is the maximum length of the string that can be fitted in buf
+    // so the buffer must be at least max_len+1 long
+    char temp_str[12] = {0};  // for doing itoa conversions
     response[0] = '\0';  // make a blank string
 
     char* next_arg = strtok(buf, ":");
     if (strcmp(next_arg, "SERVO") == 0) {
-        next_arg = strtok(NULL, ":");
-        if (next_arg == NULL) {
-            strncat(response, "NACK:Missing servo number", max_len);
-            return strlen(response);
-        }
+        next_arg = get_next_arg(response, "NACK:Missing servo number", max_len);
+        if(next_arg == NULL) {return;}
 
-        int servo_num;
+        unsigned long int servo_num;
 
         if (strcmp(next_arg, "I?") == 0) {
             // Get stored current value
-            strncat(response, itoa(board_current_ma, temp_str), max_len);
-            return strlen(response);
+            append_str(response, itoa(board_current_ma, temp_str), max_len);
+            return;
         } else if (strcmp(next_arg, "V?") == 0) {
             // Get stored voltage value
-            strncat(response, itoa(board_voltage_mv, temp_str), max_len);
-            return strlen(response);
+            append_str(response, itoa(board_voltage_mv, temp_str), max_len);
+            return;
         } else if (isdigit((int)next_arg[0])) {
-            servo_num = atoi(next_arg);
+            servo_num = strtoul(next_arg, NULL, 10);
             // bounds check
-            if (servo_num < 0 || servo_num >= NUM_SERVOS) {
-                strncat(response, "NACK:Invalid servo number", max_len);
-                return strlen(response);
+            if (servo_num >= NUM_SERVOS) {
+                append_str(response, "NACK:Invalid servo number", max_len);
+                return;
             }
         } else {
-            strncat(response, "NACK:Missing servo number", max_len);
-            return strlen(response);
+            append_str(response, "NACK:Missing servo number", max_len);
+            return;
         }
 
-        next_arg = strtok(NULL, ":");
-        if (next_arg == NULL) {
-            strncat(response, "NACK:Missing servo command", max_len);
-            return strlen(response);
-        }
+        next_arg = get_next_arg(response, "NACK:Missing servo command", max_len);
+        if(next_arg == NULL) {return;}
 
         if (strcmp(next_arg, "SET") == 0) {
-            next_arg = strtok(NULL, ":");
-            if (next_arg == NULL) {
-                strncat(response, "NACK:Missing servo setpoint", max_len);
-                return strlen(response);
-            } else if (!isdigit((int)next_arg[0])) {
-                strncat(response, "NACK:Invalid servo setpoint", max_len);
-                return strlen(response);
+            next_arg = get_next_arg(response, "NACK:Missing servo setpoint", max_len);
+            if(next_arg == NULL) {return;}
+            if (!isdigit((int)next_arg[0])) {
+                append_str(response, "NACK:Invalid servo setpoint", max_len);
+                return;
             }
 
-            int servo_val = atoi(next_arg);
+            unsigned long int servo_val = strtoul(next_arg, NULL, 10);
 
             // bounds check
             if (servo_val < MIN_SERVO_PULSE || servo_val > MAX_SERVO_PULSE) {
-                strncat(response, "NACK:Invalid servo setpoint", max_len);
-                return strlen(response);
+                append_str(response, "NACK:Invalid servo setpoint", max_len);
+                return;
             }
             // Set servo value
             servo_set_pos((uint8_t) servo_num, (uint16_t) servo_val);
 
-            strncat(response, "ACK", max_len);
-            return strlen(response);
+            append_str(response, "ACK", max_len);
+            return;
         } else if (strcmp(next_arg, "GET?") == 0) {
             // Get servo value
-            strncat(response, itoa(servo_get_pos((uint8_t)servo_num), temp_str), max_len);
-            return strlen(response);
+            append_str(response, itoa(servo_get_pos((uint8_t)servo_num), temp_str), max_len);
+            return;
         } else if (strcmp(next_arg, "DISABLE") == 0) {
             // Disable servo_num
             servo_disable((uint8_t)servo_num);
 
-            strncat(response, "ACK", max_len);
-            return strlen(response);
+            append_str(response, "ACK", max_len);
+            return;
         } else {
-            strncat(response, "NACK:Unknown servo command", max_len);
-            return strlen(response);
+            append_str(response, "NACK:Unknown servo command", max_len);
+            return;
         }
+    } else if (strcmp(next_arg, "*IDN?") == 0) {
+        // Identifier string: manufacturer, board name, asset tag, version
+        append_str(response, "Student Robotics:" BOARD_NAME_SHORT ":", max_len);
+        append_str(response, (const char *)SERIALNUM_BOOTLOADER_LOC, max_len);
+        append_str(response, ":" FW_VER, max_len);
+        return;
+    } else if (strcmp(next_arg, "*STATUS?") == 0) {
+        append_str(response, i2c_timed_out ? "1" : "0", max_len);  // I2C is timed out
+        append_str(response, ":", max_len);
+        append_str(response, detected_power_good ? "1" : "0", max_len);  // power good
+        return;
     } else if (strcmp(next_arg, "*RESET") == 0) {
         servo_reset();
 
-        strncat(response, "ACK", max_len);
-        return strlen(response);
-    } else if (strcmp(next_arg, "*IDN?") == 0) {
-        // Identifier string: manufacturer, board name, asset tag, version
-        strncat(response, "Student Robotics:", max_len);
-        strncat(response, BOARD_NAME_SHORT, max_len - strlen(response));
-        strncat(response, ":", max_len - strlen(response));
-        strncat(response, (const char *)SERIALNUM_BOOTLOADER_LOC, max_len - strlen(response));
-        strncat(response, ":", max_len - strlen(response));
-        strncat(response, FW_VER, max_len - strlen(response));
-        return strlen(response);
-    } else if (strcmp(next_arg, "*STATUS?") == 0) {
-        strncat(response, i2c_timed_out ? "1" : "0", max_len);  // I2C is timed out
-        strncat(response, ":", max_len - strlen(response));
-        strncat(response, detected_power_good ? "1" : "0", max_len - strlen(response));  // power good
-        return strlen(response);
+        append_str(response, "ACK", max_len);
+        return;
     } else if (strcmp(next_arg, "ECHO") == 0) {
         next_arg = strtok(NULL, ":");
 
-        strncat(response, next_arg, max_len);
-        return strlen(response);
+        append_str(response, next_arg, max_len);
+        return;
     } else {
-        strncat(response, "NACK:Unknown command: '", max_len);
-        strncat(response, next_arg, max_len - strlen(response));
-        strncat(response, "'", max_len - strlen(response));
-        return strlen(response);
+        append_str(response, "NACK:Unknown command: '", max_len);
+        append_str(response, next_arg, max_len);
+        append_str(response, "'", max_len);
+        return;
     }
 
     // This should be unreachable
-    strncat(response, "NACK:Unknown error", max_len);
-    return strlen(response);
+    append_str(response, "NACK:Unknown error", max_len);
+    return;
 }
 
 static char* itoa(int value, char* string) {
+    // string must be a buffer of at least 12 chars
     // including stdio.h to get sprintf overflows the rom
-    char tmp[33];
+    char tmp[11];
     char* tmp_ptr = tmp;
     char* sp = string;
     unsigned int digit;

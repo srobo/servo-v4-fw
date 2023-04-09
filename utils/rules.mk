@@ -265,4 +265,4 @@ endif
 %.dfu:	%.bin
 	@printf "  DFU   $(*).bin\n"
 # dfu-util always returns an error
-	$(Q)$(DFU_UTIL) -d $(VID):$(PID) -D $(*).bin || true
+	$(Q)$(DFU_UTIL) -E 1 -d $(VID):$(PID) -D $(*).bin || true

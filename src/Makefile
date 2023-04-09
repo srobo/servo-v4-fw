@@ -17,7 +17,7 @@
 ## You should have received a copy of the GNU Lesser General Public License
 ## along with this library.  If not, see <http://www.gnu.org/licenses/>.
 ##
-FW_VER ?= 3.0
+FW_VER ?= 4.3
 
 # Name of C file with main function
 BINARY = main
@@ -36,7 +36,7 @@ endif
 
 PYTHON ?= $(shell which python3)
 # Convert FW_VER to BCD
-FW_REV = $(shell echo $(FW_VER) | $(PYTHON) -c 'print("".join(f"{int(x):02x}" for x in input().split(".")))')
+FW_REV = $(shell echo $(FW_VER) | $(PYTHON) -c 'print("".join(f"{int(x):02x}" for x in input().split(".")[:2]))')
 
 DEFS = -DFW_VER=\"$(FW_VER)\" \
 	  -DSR_DEV_VID=0x$(VID) \

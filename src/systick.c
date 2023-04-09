@@ -14,8 +14,8 @@ void systick_init(void) {
     systick_set_clocksource(STK_CSR_CLKSOURCE_AHB_DIV8);
 
     // 9000000/9000 = 1000 overflows per second
-    // SysTick interrupt every N clock pulses: set reload to N-1
-    systick_set_reload(8999);
+    // SysTick interrupt every N clock pulses
+    systick_set_reload(9000);
 
     systick_interrupt_enable();
 
@@ -30,8 +30,7 @@ void sys_tick_handler(void) {
         if (i2c_timed_out) {
             // reset watchdog
             reset_i2c_watchdog();
-            init_expander(I2C_EXPANDER_ADDR);
-            init_current_sense(CURRENT_SENSE_ADDR);
+            init_i2c_devices(false);
         }
         start_servo_period();
         current_sense_updated = false;
