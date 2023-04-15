@@ -23,8 +23,7 @@ void i2c_stop_message(void);
 void i2c_send_byte(char c);
 bool i2c_recv_bytes(uint8_t addr, uint8_t* buf, uint8_t len);
 
-// Set expander into byte/bank mode (IOCON.SEQOP=0, IOCON.BANK=0)
-// configure pin directions and pullups
+// configure pin directions and pullups on expander
 void init_expander(uint8_t addr);
 void get_expander_status(uint8_t addr);
 

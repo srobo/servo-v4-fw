@@ -11,17 +11,6 @@
 #include "global_vars.h"
 #include "i2c.h"
 
-// ## Global variable defines ##
-// externs in global_vars.h
-
-bool detected_power_good = false;
-int board_voltage_mv = 0;
-int board_current_ma = 0;
-
-volatile bool current_sense_updated = false;
-
-// ####
-
 void init(void);
 void jump_to_bootloader(void);
 
@@ -33,16 +22,6 @@ int main(void) {
 
     while (1) {
         usb_poll();
-        // measure servo current in dead-time after all pulses
-        if (!processing_servo_pulses && !current_sense_updated) {
-            get_expander_status(I2C_EXPANDER_ADDR);
-            INA219_meas_t res = measure_current_sense(CURRENT_SENSE_ADDR);
-            if (res.success) {
-                board_voltage_mv = res.voltage;
-                board_current_ma = res.current;
-            }
-            current_sense_updated = true;
-        }
         if (re_enter_bootloader) {
             jump_to_bootloader();
         }

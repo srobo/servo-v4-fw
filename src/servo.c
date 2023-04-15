@@ -11,12 +11,14 @@
 
 #define US_TO_TICK(x) ((uint16_t)x / 5)
 #define TICK_TO_US(x) (x * 5)
+#define TICKS_BETWEEN_EDGES US_TO_TICK(100)
+#define START_TICKS_PADDING US_TO_TICK(20)
 
 static const uint8_t servo_bit_mapping[] = {15, 14, 13, 12, 11, 10, 9, 8, 0, 1, 2, 3};
+typedef enum {XFR_BOTH, XFR_LOW, XFR_HIGH} transfer_mode_t;
 
 static volatile uint16_t current_pin_state = 0x0000;
 static volatile uint8_t current_servo_step = 0;
-volatile uint8_t processing_servo_pulses = 0;
 
 typedef struct {
     uint8_t idx;
@@ -25,8 +27,8 @@ typedef struct {
 } servo_t;
 
 static volatile servo_t servo_state[NUM_SERVOS] = {};
-// loaded from servo_state at the end of each period
-static servo_t current_servo_state[NUM_SERVOS] = {};
+// loaded from servo_state at the start of each phase
+static servo_t current_servo_state[SERVOS_PER_PHASE] = {};
 
 static void init_timer(void) {
     // Enable TIM1 clock
@@ -44,6 +46,10 @@ static void init_timer(void) {
     timer_set_prescaler(TIM1, 360);  // 200kHz
     timer_set_period(TIM1, UINT16_MAX);
     timer_continuous_mode(TIM1);
+
+    timer_set_oc_mode(TIM1, TIM_OC1, TIM_OCM_PWM1);
+    timer_enable_oc_preload(TIM1, TIM_OC1);
+    timer_set_oc_value(TIM1, TIM_OC1, 0);
 }
 
 void servo_init(void) {
@@ -108,13 +114,28 @@ void servo_reset(void) {
     }
 }
 
-static void set_expander_output(uint16_t val) {
-    // this uses an existing transaction with the expander in a special byte mode that
-    // alternates between the AB register pairs to minimise the data sent over I2C
-    // mask in fixed values, SMPS_EN=0, LINK_EN=0
+static void set_expander_output(uint16_t val, transfer_mode_t mode) {
+    // Assumes IOCON.BANK=0 to write the A & B registers in a single transaction
+    const uint8_t EXT_GPIOA = 0x12;
+    const uint8_t EXT_GPIOB = 0x13;
+    // mask in fixed values, n_SMPS_EN=0, LINK_EN=0
     val &= 0xFF9F;
-    i2c_send_byte((uint8_t)(val & 0xff));  // A-reg first
-    i2c_send_byte((uint8_t)((val >> 8) & 0xff));
+
+    // setup transaction to GPIO register
+    i2c_start_message(I2C_EXPANDER_ADDR);
+    if (mode == XFR_HIGH) {
+        i2c_send_byte(EXT_GPIOB);
+    } else {
+        i2c_send_byte(EXT_GPIOA);
+    }
+
+    if ((mode == XFR_BOTH) || (mode == XFR_LOW)) {
+        i2c_send_byte((uint8_t)(val & 0xff));  // A-reg first
+    }
+    if ((mode == XFR_BOTH) || (mode == XFR_HIGH)) {
+        i2c_send_byte((uint8_t)((val >> 8) & 0xff));
+    }
+    i2c_stop_message();
 }
 
 static int compare_servos(const void* a, const void* b) {
@@ -122,128 +143,104 @@ static int compare_servos(const void* a, const void* b) {
     return ((servo_t*)a)->pulse - ((servo_t*)b)->pulse;
 }
 
-static void load_servo_state(void) {
-    servo_t active_servos[NUM_SERVOS];
-    servo_t inactive_servos[NUM_SERVOS];
+static void load_servo_state(uint8_t phase) {
+    // phase 0 is reserved for other uses
+    const uint8_t offset = (phase - 1) * SERVOS_PER_PHASE;
+    uint16_t max_pulse_len = 0;
+    servo_t active_servos[SERVOS_PER_PHASE] = {0};
     uint8_t num_active = 0;
-    uint8_t num_inactive = 0;
-    servo_t* state_ptr = current_servo_state;
 
     // split out active servos
-    for (uint8_t i = 0; i < NUM_SERVOS; i++) {
-        if (servo_state[i].enabled) {
-            active_servos[num_active] = servo_state[i];
+    for (uint8_t i = 0; i < SERVOS_PER_PHASE; i++) {
+        if (servo_state[i + offset].enabled) {
+            active_servos[num_active] = servo_state[i + offset];
             num_active++;
-        } else {
-            inactive_servos[num_inactive] = servo_state[i];
-            num_inactive++;
         }
     }
 
     if (num_active > 0) {
-        // sort active servos into ascending order of pulse
+        // sort active servos into ascending order of pulse length
         qsort(active_servos, num_active, sizeof(servo_t), compare_servos);
 
         // store in current_servo_state
-        memcpy(state_ptr, active_servos, sizeof(servo_t) * num_active);
-        state_ptr += num_active;
+        memcpy(current_servo_state, active_servos, sizeof(servo_t) * num_active);
+        max_pulse_len = current_servo_state[num_active - 1].pulse;
     }
-    if (num_inactive > 0) {
-        memcpy(state_ptr, inactive_servos, sizeof(servo_t) * num_inactive);
+    for (uint8_t i = num_active; i < SERVOS_PER_PHASE; i++) {
+        current_servo_state[i].enabled = false;
+        current_servo_state[i].pulse = max_pulse_len;
     }
 }
 
-void start_servo_period(void) {
+void start_servo_phase(uint8_t phase) {
     // disable timer interrupt
     timer_disable_irq(TIM1, TIM_DIER_CC1IE);
-    load_servo_state();
-    current_servo_step = 0;
-    // if all servos are disabled
+    load_servo_state(phase);
+
+    current_servo_step = 1;
+    // if all servos in this phase are disabled, skip the phase
     if (current_servo_state[0].enabled == false) {
         return;
     }
 
-    // Set expander into byte/bank mode to alternate between GPIOA and GPIOB
-    const uint8_t IOCON = 0x0A;
-    i2c_start_message(I2C_EXPANDER_ADDR);
-    i2c_send_byte(IOCON);
-    i2c_send_byte(1 << 5);  // SEQOP=1, BANK=0
-    i2c_stop_message();
+    // do step 0
+    // start each phase with all servo pins low except the first servo of the phase
+    current_pin_state = (uint16_t)(1 << servo_bit_mapping[current_servo_state[0].idx]);
 
-    // setup transaction to GPIO register
-    i2c_start_message(I2C_EXPANDER_ADDR);
-    i2c_send_byte(0x12);
-    // set flag for processing servo pulses
-    processing_servo_pulses = 1;
-    // set all enabled servo bits high
-    current_pin_state = 0x0000;
-    for (uint8_t i = 0; i < NUM_SERVOS; i++) {
-        if(current_servo_state[i].enabled) {
-            current_pin_state |= (1 << servo_bit_mapping[current_servo_state[i].idx]);
-        }
-    }
-    // set timer val to 0
-    timer_set_counter(TIM1, 0);
-    // set compare to first servo pulse
-    timer_set_oc_value(TIM1, TIM_OC1, current_servo_state[0].pulse);
-    // write bit val to expander
-    set_expander_output(current_pin_state);
     // enable timer interrupt
     timer_enable_irq(TIM1, TIM_DIER_CC1IE);
+    // set compare for first split, allow extra time to fully set expander
+    timer_set_period(TIM1, TICKS_BETWEEN_EDGES + START_TICKS_PADDING);
+    // set timer val to 0
+    timer_set_counter(TIM1, 0);
     // Start counting
     timer_enable_counter(TIM1);
+
+    // write bit val to expander
+    set_expander_output(current_pin_state, XFR_BOTH);
 }
 
 void tim1_cc_isr(void) {
-    uint8_t next_servo_step;
-    uint8_t current_servo_index;
+    uint8_t servo_step = (current_servo_step < SERVOS_PER_PHASE)?current_servo_step:(current_servo_step - SERVOS_PER_PHASE);
+    uint8_t servo_index = current_servo_state[servo_step].idx;
+    uint16_t bit_to_change = (uint16_t)(1 << servo_bit_mapping[servo_index]);
 
-    do {
-        next_servo_step = current_servo_step + 1;
-
-        current_servo_index = current_servo_state[current_servo_step].idx;
-        // set current servo bit low (high pulse complete)
-        current_pin_state &= ~((uint16_t)(1 << servo_bit_mapping[current_servo_index]));
-
-        // multiple servos may be set to the same value, set all the bits together
-        while (current_servo_state[next_servo_step].pulse <= (current_servo_state[current_servo_step].pulse + US_TO_TICK(20))) {
-            if (current_servo_state[next_servo_step].enabled == false) {
-                break;
-            }
-            // set current servo bit low (high pulse complete)
-            current_pin_state &= ~((uint16_t)(1 << servo_bit_mapping[current_servo_index]));
-            if (++next_servo_step >= NUM_SERVOS) {
-                break;
-            }
+    if (current_servo_step == (SERVOS_PER_PHASE - 1)) {  // last rising edge of the phase
+        // this gap is the remaining delay before the first falling edge
+        const uint16_t ticks_passed = (TICKS_BETWEEN_EDGES * 3 + START_TICKS_PADDING);
+        timer_set_period(TIM1, current_servo_state[0].pulse - ticks_passed);
+        if (current_servo_state[current_servo_step].enabled) {
+            // set the active servo's output high
+            current_pin_state |= bit_to_change;
         }
-
-        // write bit val to expander
-        set_expander_output(current_pin_state);
-
-        if ((current_servo_state[next_servo_step].enabled == false) || (next_servo_step >= NUM_SERVOS)) {
-            break;
+    } else if (current_servo_step < SERVOS_PER_PHASE) {  // A rising edge phase
+        // rising edges are equally spaced
+        timer_set_period(TIM1, TICKS_BETWEEN_EDGES);
+        if (current_servo_state[current_servo_step].enabled) {
+            // set the active servo's output high
+            current_pin_state |= bit_to_change;
         }
-
-    // since sending I2C messages is slow (20us/byte) we may have missed the next servo's pulse end
-    // so we'll handle that right now
-        current_servo_step = next_servo_step;
-    } while ((uint16_t)(current_servo_state[next_servo_step].pulse + 1) > timer_get_counter(TIM1));
-
-    // completed all active servos
-    if(current_servo_state[next_servo_step].enabled == false || next_servo_step >= NUM_SERVOS) {
-        // disable timer interrupt
-        timer_disable_irq(TIM1, TIM_DIER_CC1IE);
-        // stop counting
-        timer_disable_counter(TIM1);
-        // clear flag for processing servo pulses
-        processing_servo_pulses = 0;
-        // stop expander transaction
-        i2c_stop_message();
-        // next period will be triggered by the systick interrupt
-    } else {
-        // set the timer compare to the next servo pulse end
-        timer_set_oc_value(TIM1, TIM_OC1, current_servo_state[next_servo_step].pulse);
+    } else {  // A falling edge phase
+        if (current_servo_step == (SERVOS_PER_PHASE * 2 - 1)) {
+            // this phase is complete, stop interrupts until the next phase
+            timer_disable_irq(TIM1, TIM_DIER_CC1IE);
+        } else {
+            // We need to account for how far through this phase we are
+            uint16_t ticks_to_next_edge = (
+                current_servo_state[servo_step + 1].pulse
+                - current_servo_state[servo_step].pulse
+                + START_TICKS_PADDING + TICKS_BETWEEN_EDGES);
+            timer_set_period(TIM1, ticks_to_next_edge);
+        }
+        if (current_servo_state[servo_step].enabled) {
+            // set the active servo's output low
+            current_pin_state &= ~bit_to_change;
+        }
     }
 
+    // write bit val to expander
+    set_expander_output(current_pin_state, (servo_bit_mapping[servo_index] < 8) ? XFR_LOW : XFR_HIGH);
+
+    current_servo_step++;
     timer_clear_flag(TIM1, TIM_SR_CC1IF);
 }
