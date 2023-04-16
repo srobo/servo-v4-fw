@@ -12,6 +12,7 @@ static inline bool i2c_transaction_in_progress(void) {return I2C_SR2(I2C1) & I2C
 // The ACK requires the slave device to be actively participating in the transaction
 #define I2C_FAIL_AND_RETURN_ON_NACK(x) if(nack_recieved()) { \
     i2c_timed_out = true; \
+    set_led(LED_STATUS_RED); \
     if (i2c_transaction_in_progress()) {i2c_send_stop(I2C1);} return x;}
 
 
@@ -239,7 +240,7 @@ void get_expander_status(uint8_t addr) {
 
     uint8_t status;
     bool success = i2c_recv_bytes(addr, &status, 1);  // w/ repeated start bit
-    i2c_send_stop(I2C1);
+    // i2c_send_stop(I2C1);
 
     // if i2c timed out don't write to global values
     if (!i2c_timed_out && success) {
