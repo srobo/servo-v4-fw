@@ -11,11 +11,9 @@
 
 #define US_TO_TICK(x) ((uint16_t)x / 5)
 #define TICK_TO_US(x) (x * 5)
-#define TICKS_BETWEEN_EDGES US_TO_TICK(100)
-#define START_TICKS_PADDING US_TO_TICK(20)
+#define TICKS_BETWEEN_EDGES US_TO_TICK(125)
 
 static const uint8_t servo_bit_mapping[] = {15, 14, 13, 12, 11, 10, 9, 8, 0, 1, 2, 3};
-typedef enum {XFR_BOTH, XFR_LOW, XFR_HIGH} transfer_mode_t;
 
 static volatile uint16_t current_pin_state = 0x0000;
 static volatile uint8_t current_servo_step = 0;
@@ -114,27 +112,17 @@ void servo_reset(void) {
     }
 }
 
-static void set_expander_output(uint16_t val, transfer_mode_t mode) {
+static void set_expander_output(uint16_t val) {
     // Assumes IOCON.BANK=0 to write the A & B registers in a single transaction
     const uint8_t EXT_GPIOA = 0x12;
-    const uint8_t EXT_GPIOB = 0x13;
     // mask in fixed values, n_SMPS_EN=0, LINK_EN=0
     val &= 0xFF9F;
 
     // setup transaction to GPIO register
     i2c_start_message(I2C_EXPANDER_ADDR);
-    if (mode == XFR_HIGH) {
-        i2c_send_byte(EXT_GPIOB);
-    } else {
-        i2c_send_byte(EXT_GPIOA);
-    }
-
-    if ((mode == XFR_BOTH) || (mode == XFR_LOW)) {
-        i2c_send_byte((uint8_t)(val & 0xff));  // A-reg first
-    }
-    if ((mode == XFR_BOTH) || (mode == XFR_HIGH)) {
-        i2c_send_byte((uint8_t)((val >> 8) & 0xff));
-    }
+    i2c_send_byte(EXT_GPIOA);
+    i2c_send_byte((uint8_t)(val & 0xff));  // A-reg first
+    i2c_send_byte((uint8_t)((val >> 8) & 0xff));
     i2c_stop_message();
 }
 
@@ -177,45 +165,52 @@ void start_servo_phase(uint8_t phase) {
     timer_disable_irq(TIM1, TIM_DIER_CC1IE);
     load_servo_state(phase);
 
-    current_servo_step = 1;
+    current_servo_step = 0;
+
+    // Clear all servo outputs
+    current_pin_state = 0x0000;
+
     // if all servos in this phase are disabled, skip the phase
     if (current_servo_state[0].enabled == false) {
+        // write bit val to expander
+        set_expander_output(current_pin_state);
+
         return;
     }
 
-    // do step 0
-    // start each phase with all servo pins low except the first servo of the phase
-    current_pin_state = (uint16_t)(1 << servo_bit_mapping[current_servo_state[0].idx]);
-
-    // enable timer interrupt
-    timer_enable_irq(TIM1, TIM_DIER_CC1IE);
-    // set compare for first split, allow extra time to fully set expander
-    timer_set_period(TIM1, TICKS_BETWEEN_EDGES + START_TICKS_PADDING);
+    // set compare for first split
+    timer_set_period(TIM1, TICKS_BETWEEN_EDGES - 1);
     // set timer val to 0
     timer_set_counter(TIM1, 0);
     // Start counting
     timer_enable_counter(TIM1);
-
-    // write bit val to expander
-    set_expander_output(current_pin_state, XFR_BOTH);
+    // enable timer interrupt
+    // this causes the ISR to run as soon as this ISR completes
+    timer_enable_irq(TIM1, TIM_DIER_CC1IE);
 }
 
 void tim1_cc_isr(void) {
     uint8_t servo_step = (current_servo_step < SERVOS_PER_PHASE)?current_servo_step:(current_servo_step - SERVOS_PER_PHASE);
     uint8_t servo_index = current_servo_state[servo_step].idx;
     uint16_t bit_to_change = (uint16_t)(1 << servo_bit_mapping[servo_index]);
+    // Handle delays from systick interrupt
+    if (current_servo_step == 0) {
+        // set timer val to 0
+        timer_set_counter(TIM1, 0);
+    }
+    timer_clear_flag(TIM1, TIM_SR_CC1IF);
 
     if (current_servo_step == (SERVOS_PER_PHASE - 1)) {  // last rising edge of the phase
         // this gap is the remaining delay before the first falling edge
-        const uint16_t ticks_passed = (TICKS_BETWEEN_EDGES * 3 + START_TICKS_PADDING);
-        timer_set_period(TIM1, current_servo_state[0].pulse - ticks_passed);
+        const uint16_t ticks_passed = (TICKS_BETWEEN_EDGES * 3);
+        timer_set_period(TIM1, current_servo_state[0].pulse - ticks_passed - 1);
         if (current_servo_state[current_servo_step].enabled) {
             // set the active servo's output high
             current_pin_state |= bit_to_change;
         }
     } else if (current_servo_step < SERVOS_PER_PHASE) {  // A rising edge phase
         // rising edges are equally spaced
-        timer_set_period(TIM1, TICKS_BETWEEN_EDGES);
+        timer_set_period(TIM1, TICKS_BETWEEN_EDGES - 1);
         if (current_servo_state[current_servo_step].enabled) {
             // set the active servo's output high
             current_pin_state |= bit_to_change;
@@ -229,7 +224,7 @@ void tim1_cc_isr(void) {
             uint16_t ticks_to_next_edge = (
                 current_servo_state[servo_step + 1].pulse
                 - current_servo_state[servo_step].pulse
-                + START_TICKS_PADDING + TICKS_BETWEEN_EDGES);
+                + TICKS_BETWEEN_EDGES - 1);
             timer_set_period(TIM1, ticks_to_next_edge);
         }
         if (current_servo_state[servo_step].enabled) {
@@ -239,8 +234,7 @@ void tim1_cc_isr(void) {
     }
 
     // write bit val to expander
-    set_expander_output(current_pin_state, (servo_bit_mapping[servo_index] < 8) ? XFR_LOW : XFR_HIGH);
+    set_expander_output(current_pin_state);
 
     current_servo_step++;
-    timer_clear_flag(TIM1, TIM_SR_CC1IF);
 }

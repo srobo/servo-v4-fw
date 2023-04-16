@@ -239,6 +239,7 @@ void get_expander_status(uint8_t addr) {
 
     uint8_t status;
     bool success = i2c_recv_bytes(addr, &status, 1);  // w/ repeated start bit
+    i2c_send_stop(I2C1);
 
     // if i2c timed out don't write to global values
     if (!i2c_timed_out && success) {
