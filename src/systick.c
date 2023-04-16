@@ -39,15 +39,16 @@ void sys_tick_handler(void) {
                 // reset watchdog
                 reset_i2c_watchdog();
                 init_i2c_devices(false);
+            } else {
+                // measure servo current in dead-time before all pulses
+                // 532us is needed after setup so skip it if the watchdog failed last cycle
+                INA219_meas_t res = measure_current_sense(CURRENT_SENSE_ADDR);
+                if (res.success) {
+                    board_voltage_mv = res.voltage;
+                    board_current_ma = res.current;
+                }
             }
-
-            // measure servo current in dead-time before all pulses
             get_expander_status(I2C_EXPANDER_ADDR);
-            INA219_meas_t res = measure_current_sense(CURRENT_SENSE_ADDR);
-            if (res.success) {
-                board_voltage_mv = res.voltage;
-                board_current_ma = res.current;
-            }
         } else {
             if (!i2c_timed_out) {
                 start_servo_phase(servo_phase);
