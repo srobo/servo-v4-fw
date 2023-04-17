@@ -207,7 +207,7 @@ void init_expander(uint8_t addr){
     const uint8_t IOCON = 0x0A;
     i2c_start_message(addr);
     i2c_send_byte(IOCON);
-    i2c_send_byte(1 << 5);  // SEQOP=1, BANK=0
+    i2c_send_byte(0x00);  // SEQOP=0, BANK=0
     i2c_stop_message();
 
     // these values assume IOCON.BANK = 0

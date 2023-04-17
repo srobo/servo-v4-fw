@@ -12,6 +12,7 @@
 #define US_TO_TICK(x) ((uint16_t)x / 5)
 #define TICK_TO_US(x) (x * 5)
 #define TICKS_BETWEEN_EDGES US_TO_TICK(125)
+static void calculate_phase_steps(uint8_t phase);
 
 static const uint8_t servo_bit_mapping[] = {15, 14, 13, 12, 11, 10, 9, 8, 0, 1, 2, 3};
 
@@ -24,9 +25,18 @@ typedef struct {
     uint16_t pulse;  // in timer ticks
 } servo_t;
 
-static volatile servo_t servo_state[NUM_SERVOS] = {};
-// loaded from servo_state at the start of each phase
-static servo_t current_servo_state[SERVOS_PER_PHASE] = {};
+typedef struct {
+    uint8_t idx;
+    bool enabled;
+    bool rising;
+    uint16_t next_steps;  // in timer ticks
+} servo_step_t;
+
+static servo_t servo_state[NUM_SERVOS] = {};
+static servo_step_t servo_steps[NUM_SERVO_PHASES][SERVO_STEPS_PER_PHASE] = { 0 };
+
+// loaded from servo_steps at the start of each phase
+static servo_step_t current_servo_steps[SERVO_STEPS_PER_PHASE] = {};
 
 static void init_timer(void) {
     // Enable TIM1 clock
@@ -55,6 +65,10 @@ void servo_init(void) {
     for (uint8_t i = 0; i < NUM_SERVOS; i++) {
         servo_state[i].idx = i;
         servo_state[i].enabled = false;
+        servo_state[i].pulse = US_TO_TICK(MIN_SERVO_PULSE);
+    }
+    for (uint8_t i = 0; i < NUM_SERVO_PHASES; i++) {
+        calculate_phase_steps(i + 1);
     }
 
     // setup timer
@@ -85,6 +99,8 @@ void servo_set_pos(uint8_t idx, uint16_t pulse_us) {
     servo_state[idx].enabled = true;
     set_led(idx);
     servo_state[idx].pulse = US_TO_TICK(pulse_us);
+
+    calculate_phase_steps((idx / SERVOS_PER_PHASE) + 1);
 }
 
 void servo_disable(uint8_t idx) {
@@ -93,6 +109,8 @@ void servo_disable(uint8_t idx) {
     }
     clear_led(idx);
     servo_state[idx].enabled = false;
+
+    calculate_phase_steps((idx / SERVOS_PER_PHASE) + 1);
 }
 
 uint16_t servo_get_pos(uint8_t idx) {
@@ -112,6 +130,86 @@ void servo_reset(void) {
     }
 }
 
+static int compare_servos(const void* a, const void* b) {
+    // helper function to sort servos by pulse length
+    return ((servo_t*)a)->pulse - ((servo_t*)b)->pulse;
+}
+
+static void calculate_phase_steps(uint8_t phase) {
+    // phase 0 is reserved for other uses
+    if ((phase == 0) || (phase > NUM_SERVO_PHASES)) {
+        return;
+    }
+
+    servo_t sorted_servo_states[SERVOS_PER_PHASE] = {0};
+    servo_step_t sorted_servo_steps[SERVO_STEPS_PER_PHASE] = {0};
+    const uint8_t offset = (phase - 1) * SERVOS_PER_PHASE;
+    uint8_t num_active = 0;
+    uint8_t num_inactive = 0;
+    uint16_t max_pulse_len = US_TO_TICK(MIN_SERVO_PULSE);
+
+    // split out active servos
+    for (uint8_t i = 0; i < SERVOS_PER_PHASE; i++) {
+        if (servo_state[i + offset].enabled) {
+            sorted_servo_states[num_active] = servo_state[i + offset];
+            num_active++;
+        }
+    }
+    // include disabled servos after the active servos
+    for (uint8_t i = 0; i < SERVOS_PER_PHASE; i++) {
+        if (!servo_state[i + offset].enabled) {
+            sorted_servo_states[num_active + num_inactive] = servo_state[i + offset];
+            num_inactive++;
+        }
+    }
+
+    if (num_active > 0) {
+        // sort active servos into ascending order of pulse length
+        qsort(sorted_servo_states, num_active, sizeof(servo_t), compare_servos);
+        max_pulse_len = sorted_servo_states[num_active - 1].pulse;
+    }
+    // set disabled servo pulses to the longest pulse length
+    for (uint8_t i = num_active; i < SERVOS_PER_PHASE; i++) {
+        sorted_servo_states[i].pulse = max_pulse_len;
+    }
+
+    // calculate this phase's rising steps
+    uint8_t step;
+    for (step = 0; step < SERVOS_PER_PHASE; step++) {
+        sorted_servo_steps[step].idx = sorted_servo_states[step].idx;
+        sorted_servo_steps[step].enabled = sorted_servo_states[step].enabled;
+        sorted_servo_steps[step].rising = true;
+        if (step == (SERVOS_PER_PHASE - 1)) {
+            // this gap is the remaining delay before the first falling edge
+            sorted_servo_steps[step].next_steps = sorted_servo_states[0].pulse - (TICKS_BETWEEN_EDGES * 3);
+        } else {
+            sorted_servo_steps[step].next_steps = TICKS_BETWEEN_EDGES;
+        }
+    }
+
+    // calculate this phase's falling steps
+    for (uint8_t idx = 0; idx < SERVOS_PER_PHASE; idx++) {
+        step = idx + SERVOS_PER_PHASE;
+        sorted_servo_steps[step].idx = sorted_servo_states[idx].idx;
+        sorted_servo_steps[step].enabled = sorted_servo_states[idx].enabled;
+        sorted_servo_steps[step].rising = false;
+        if (idx == (SERVOS_PER_PHASE - 1)) {
+            // this phase is complete so this step never happens
+            sorted_servo_steps[step].next_steps = UINT16_MAX;
+        } else {
+            // We need to account for how far through this phase we are
+            uint16_t ticks_to_next_edge = (
+                sorted_servo_states[idx + 1].pulse
+                - sorted_servo_states[idx].pulse
+                + TICKS_BETWEEN_EDGES);
+            sorted_servo_steps[step].next_steps = ticks_to_next_edge;
+        }
+    }
+
+    /// TODO make sure this is atomic
+    memcpy(servo_steps[phase - 1], sorted_servo_steps, sizeof(servo_step_t) * SERVO_STEPS_PER_PHASE);
+}
+
 static void set_expander_output(uint16_t val) {
     // Assumes IOCON.BANK=0 to write the A & B registers in a single transaction
     const uint8_t EXT_GPIOA = 0x12;
@@ -126,44 +224,16 @@ static void set_expander_output(uint16_t val) {
     i2c_stop_message();
 }
 
-static int compare_servos(const void* a, const void* b) {
-    // helper function to sort servos by pulse length
-    return ((servo_t*)a)->pulse - ((servo_t*)b)->pulse;
-}
-
-static void load_servo_state(uint8_t phase) {
-    // phase 0 is reserved for other uses
-    const uint8_t offset = (phase - 1) * SERVOS_PER_PHASE;
-    uint16_t max_pulse_len = 0;
-    servo_t active_servos[SERVOS_PER_PHASE] = {0};
-    uint8_t num_active = 0;
-
-    // split out active servos
-    for (uint8_t i = 0; i < SERVOS_PER_PHASE; i++) {
-        if (servo_state[i + offset].enabled) {
-            active_servos[num_active] = servo_state[i + offset];
-            num_active++;
-        }
-    }
-
-    if (num_active > 0) {
-        // sort active servos into ascending order of pulse length
-        qsort(active_servos, num_active, sizeof(servo_t), compare_servos);
-
-        // store in current_servo_state
-        memcpy(current_servo_state, active_servos, sizeof(servo_t) * num_active);
-        max_pulse_len = current_servo_state[num_active - 1].pulse;
-    }
-    for (uint8_t i = num_active; i < SERVOS_PER_PHASE; i++) {
-        current_servo_state[i].enabled = false;
-        current_servo_state[i].pulse = max_pulse_len;
-    }
-}
-
 void start_servo_phase(uint8_t phase) {
+    // phase 0 is reserved for other uses
+    if ((phase == 0) || (phase > NUM_SERVO_PHASES)) {
+        return;
+    }
     // disable timer interrupt
     timer_disable_irq(TIM1, TIM_DIER_CC1IE);
-    load_servo_state(phase);
+
+    // store this phase's steps in current_servo_steps
+    memcpy(current_servo_steps, servo_steps[phase - 1], sizeof(servo_step_t) * SERVO_STEPS_PER_PHASE);
 
     current_servo_step = 0;
 
@@ -171,10 +241,9 @@ void start_servo_phase(uint8_t phase) {
     current_pin_state = 0x0000;
 
     // if all servos in this phase are disabled, skip the phase
-    if (current_servo_state[0].enabled == false) {
+    if (current_servo_steps[0].enabled == false) {
         // write bit val to expander
         set_expander_output(current_pin_state);
-
         return;
     }
 
@@ -190,9 +259,8 @@ void start_servo_phase(uint8_t phase) {
 }
 
 void tim1_cc_isr(void) {
-    uint8_t servo_step = (current_servo_step < SERVOS_PER_PHASE)?current_servo_step:(current_servo_step - SERVOS_PER_PHASE);
-    uint8_t servo_index = current_servo_state[servo_step].idx;
-    uint16_t bit_to_change = (uint16_t)(1 << servo_bit_mapping[servo_index]);
+    servo_step_t current_step = current_servo_steps[current_servo_step];
+    uint16_t bit_to_change = (uint16_t)(1 << servo_bit_mapping[current_step.idx]);
     // Handle delays from systick interrupt
     if (current_servo_step == 0) {
         // set timer val to 0
@@ -200,37 +268,20 @@ void tim1_cc_isr(void) {
     }
     timer_clear_flag(TIM1, TIM_SR_CC1IF);
 
-    if (current_servo_step == (SERVOS_PER_PHASE - 1)) {  // last rising edge of the phase
-        // this gap is the remaining delay before the first falling edge
-        const uint16_t ticks_passed = (TICKS_BETWEEN_EDGES * 3);
-        timer_set_period(TIM1, current_servo_state[0].pulse - ticks_passed - 1);
-        if (current_servo_state[current_servo_step].enabled) {
+    timer_set_period(TIM1, current_step.next_steps - 1);
+    if (current_step.enabled) {
+        if (current_step.rising) {
             // set the active servo's output high
             current_pin_state |= bit_to_change;
-        }
-    } else if (current_servo_step < SERVOS_PER_PHASE) {  // A rising edge phase
-        // rising edges are equally spaced
-        timer_set_period(TIM1, TICKS_BETWEEN_EDGES - 1);
-        if (current_servo_state[current_servo_step].enabled) {
-            // set the active servo's output high
-            current_pin_state |= bit_to_change;
-        }
-    } else {  // A falling edge phase
-        if (current_servo_step == (SERVOS_PER_PHASE * 2 - 1)) {
-            // this phase is complete, stop interrupts until the next phase
-            timer_disable_irq(TIM1, TIM_DIER_CC1IE);
         } else {
-            // We need to account for how far through this phase we are
-            uint16_t ticks_to_next_edge = (
-                current_servo_state[servo_step + 1].pulse
-                - current_servo_state[servo_step].pulse
-                + TICKS_BETWEEN_EDGES - 1);
-            timer_set_period(TIM1, ticks_to_next_edge);
-        }
-        if (current_servo_state[servo_step].enabled) {
             // set the active servo's output low
             current_pin_state &= ~bit_to_change;
         }
+    }
+
+     if (current_servo_step == (SERVO_STEPS_PER_PHASE - 1)) {
+        // this phase is complete, stop interrupts until the next phase
+        timer_disable_irq(TIM1, TIM_DIER_CC1IE);
     }
 
     // write bit val to expander
