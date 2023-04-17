@@ -25,13 +25,6 @@ typedef struct {
     uint16_t pulse;  // in timer ticks
 } servo_t;
 
-typedef struct {
-    uint8_t idx;
-    bool enabled;
-    bool rising;
-    uint16_t next_steps;  // in timer ticks
-} servo_step_t;
-
 static servo_t servo_state[NUM_SERVOS] = {};
 static servo_step_t servo_steps[NUM_SERVO_PHASES][SERVO_STEPS_PER_PHASE] = { 0 };
 
@@ -128,6 +121,15 @@ void servo_reset(void) {
     for (uint8_t i=0; i < NUM_SERVOS; i++) {
         servo_disable(i);
     }
+}
+
+servo_step_t* get_servo_steps(uint8_t phase) {
+    // phase 0 is reserved for other uses
+    if ((phase == 0) || (phase > NUM_SERVO_PHASES)) {
+        return NULL;
+    }
+
+    return servo_steps[phase - 1];
 }
 
 static int compare_servos(const void* a, const void* b) {

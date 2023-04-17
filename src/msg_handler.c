@@ -107,6 +107,44 @@ void handle_msg(char* buf, char* response, int max_len) {
 
         append_str(response, "ACK", max_len);
         return;
+    } else if (strcmp(next_arg, "*DBG") == 0) {
+        next_arg = get_next_arg(response, "NACK:Missing debug command", max_len);
+        if(next_arg == NULL) {return;}
+        if (strcmp(next_arg, "SERVOS") == 0) {
+            next_arg = get_next_arg(response, "NACK:Missing phase number", max_len);
+            if(next_arg == NULL) {return;}
+            unsigned long int phase_num;
+            if (isdigit((int)next_arg[0])) {
+                phase_num = strtoul(next_arg, NULL, 10);
+                // bounds check
+                if ((phase_num == 0) || (phase_num > NUM_SERVO_PHASES)) {
+                    append_str(response, "NACK:Invalid phase number", max_len);
+                    return;
+                } else {
+                    servo_step_t* steps = get_servo_steps(phase_num);
+                    if (steps == NULL) {
+                        append_str(response, "NACK:failed to read servo steps", max_len);
+                        return;
+                    }
+                    append_str(response, next_arg, max_len);
+                    for (uint8_t i = 0; i < SERVO_STEPS_PER_PHASE; i++) {
+                        append_str(response, ":", max_len);
+                        append_str(response, itoa(steps[i].idx, temp_str), max_len);  // idn
+                        append_str(response, steps[i].rising ? "U" : "D", max_len);  // rising
+                        append_str(response, steps[i].enabled ? "1" : "0", max_len);  // enabled
+                        append_str(response, ":", max_len);
+                        append_str(response, itoa(steps[i].next_steps, temp_str), max_len);  // steps
+                    }
+                    return;
+                }
+            } else {
+                append_str(response, "NACK:Missing phase number", max_len);
+                return;
+            }
+        } else {
+            append_str(response, "NACK:Unknown debug command", max_len);
+            return;
+        }
     } else if (strcmp(next_arg, "ECHO") == 0) {
         next_arg = strtok(NULL, ":");
 
