@@ -90,6 +90,9 @@ bool i2c_recv_bytes(uint8_t addr, uint8_t* buf, uint8_t len) {
         return false;
     }
 
+    // Reset NACK control
+    i2c_nack_current(I2C1);
+
     // Send START condition.
     i2c_send_start(I2C1);
 
@@ -112,10 +115,10 @@ bool i2c_recv_bytes(uint8_t addr, uint8_t* buf, uint8_t len) {
         reg32 = I2C_SR2(I2C1);
 
         // Program the STOP bit.
+        i2c_send_stop(I2C1);
 
         // Read the data after the RxNE flag is set.
-        while (!(I2C_SR1(I2C1) & (I2C_SR1_RxNE | I2C_SR1_AF)));
-        I2C_FAIL_AND_RETURN_ON_NACK(false);
+        while (!(I2C_SR1(I2C1) & I2C_SR1_RxNE));
 
         buf[0] = i2c_get_data(I2C1);
     } else if (len == 2) {
@@ -134,8 +137,7 @@ bool i2c_recv_bytes(uint8_t addr, uint8_t* buf, uint8_t len) {
         i2c_disable_ack(I2C1);
 
         // Wait for BTF to be set
-        while (!(I2C_SR1(I2C1) & (I2C_SR1_BTF | I2C_SR1_AF)));
-        I2C_FAIL_AND_RETURN_ON_NACK(false);
+        while (!(I2C_SR1(I2C1) & I2C_SR1_BTF));
 
         // Program STOP
         i2c_send_stop(I2C1);
@@ -148,55 +150,54 @@ bool i2c_recv_bytes(uint8_t addr, uint8_t* buf, uint8_t len) {
         while (I2C_SR2(I2C1) & I2C_SR2_BUSY);
         // Reset NACK control
         i2c_nack_current(I2C1);
-    } else {  /// TODO this locks up
-        // this clause is unused by the code but is added for completeness when doing I2C transactions over 2 bytes long
+    } else {
+        i2c_enable_ack(I2C1);
+
         // Waiting for address to transfer.
         while (!(I2C_SR1(I2C1) & (I2C_SR1_ADDR | I2C_SR1_AF)));
         I2C_FAIL_AND_RETURN_ON_NACK(false);
 
-        uint8_t rem;
-        for (uint8_t i=0; i<len; i++) {
-            rem = len - i;
-            if (rem == 3) {
-                // Wait for DataN-2 to be received (RxNE = 1)
-                while (!(I2C_SR1(I2C1) & (I2C_SR1_RxNE | I2C_SR1_AF)));
-                I2C_FAIL_AND_RETURN_ON_NACK(false);
-                // Wait for DataN-1 to be received (BTF = 1)
-                while (!(I2C_SR1(I2C1) & (I2C_SR1_BTF | I2C_SR1_AF)));
-                I2C_FAIL_AND_RETURN_ON_NACK(false);
+        // Clear ADDR
+        reg32 = I2C_SR2(I2C1);
 
-                // Now DataN-2 is in DR and DataN-1 is in the shift register
-                // Clear ACK bit
-                i2c_disable_ack(I2C1);
+        uint8_t idx;
+        for (idx = 0; idx < (len - 3); idx++) {
+            // Read the data after the RxNE flag is set.
+            while (!(I2C_SR1(I2C1) & I2C_SR1_RxNE));
 
-                // read byte from DR (DataN-2). This will launch the DataN reception in the shift register
-                buf[i] = i2c_get_data(I2C1);
-            } else if (rem == 2) {
-                // Program STOP bit
-                i2c_send_stop(I2C1);
-
-                // Wait for the receive register to not be empty
-                while (!(I2C_SR1(I2C1) & (I2C_SR1_RxNE | I2C_SR1_AF)));
-                I2C_FAIL_AND_RETURN_ON_NACK(false);
-
-                // read byte from DR (DataN-1)
-                buf[i] = i2c_get_data(I2C1);
-            } else if (rem == 1) {
-                // Wait for the receive register to not be empty
-                while (!(I2C_SR1(I2C1) & (I2C_SR1_RxNE | I2C_SR1_AF)));
-                I2C_FAIL_AND_RETURN_ON_NACK(false);
-
-                // read byte from DR (DataN)
-                buf[i] = i2c_get_data(I2C1);
-            } else {
-                // Wait for the receive register to not be empty
-                while (!(I2C_SR1(I2C1) & (I2C_SR1_RxNE | I2C_SR1_AF)));
-                I2C_FAIL_AND_RETURN_ON_NACK(false);
-
-                // read byte from DR
-                buf[i] = i2c_get_data(I2C1);
-            }
+            // Reading the data register clears RxNE
+            buf[idx] = i2c_get_data(I2C1);
         }
+
+        // DataN-2
+        // Wait for DataN-2 to be received (RxNE = 1)
+        while (!(I2C_SR1(I2C1) & I2C_SR1_RxNE));
+        // Wait for DataN-1 to be received (BTF = 1)
+        while (!(I2C_SR1(I2C1) & I2C_SR1_BTF));
+
+        // Now DataN-2 is in DR and DataN-1 is in the shift register
+        // Clear ACK bit
+        i2c_disable_ack(I2C1);
+
+        // read byte from DR (DataN-2). This will launch the DataN reception in the shift register
+        buf[idx++] = i2c_get_data(I2C1);
+
+        // DataN-1
+        // Wait for DataN to be received (BTF = 1)
+        while (!(I2C_SR1(I2C1) & I2C_SR1_BTF));
+
+        // Program STOP bit
+        i2c_send_stop(I2C1);
+
+        // read byte from DR (DataN-1)
+        buf[idx++] = i2c_get_data(I2C1);
+
+        // DataN
+        // Wait for the receive register to not be empty
+        while (!(I2C_SR1(I2C1) & I2C_SR1_RxNE));
+
+        // read byte from DR (DataN)
+        buf[idx++] = i2c_get_data(I2C1);
     }
     return true;
 }
@@ -240,7 +241,6 @@ void get_expander_status(uint8_t addr) {
 
     uint8_t status;
     bool success = i2c_recv_bytes(addr, &status, 1);  // w/ repeated start bit
-    // i2c_send_stop(I2C1);
 
     // if i2c timed out don't write to global values
     if (!i2c_timed_out && success) {
