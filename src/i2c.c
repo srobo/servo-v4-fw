@@ -254,7 +254,6 @@ static void set_current_offset_value(uint8_t addr) {
     // Set register pointer to current register
     i2c_start_message(addr);
     i2c_send_byte(0x04);
-    i2c_stop_message();
 
     uint8_t val[2];
     bool i_success = i2c_recv_bytes(addr, val, 2);
@@ -288,11 +287,12 @@ void init_current_sense(uint8_t addr, uint16_t cal_val, uint16_t conf_val, bool 
     i2c_send_byte(0x00);  // configuration reg address
     i2c_send_byte((uint8_t)((conf_val >> 8) & 0xff));
     i2c_send_byte((uint8_t)(conf_val & 0xff));
-    i2c_stop_message();
     if (calc_offset) {
         // wait for a measurement to be made
         delay(10);
         set_current_offset_value(addr);
+    } else {
+        i2c_stop_message();
     }
 }
 
@@ -300,7 +300,6 @@ INA219_meas_t measure_current_sense(uint8_t addr) {
     // Set register pointer to current register
     i2c_start_message(addr);
     i2c_send_byte(0x04);
-    i2c_stop_message();
 
     INA219_meas_t res = {0};
 
@@ -313,7 +312,6 @@ INA219_meas_t measure_current_sense(uint8_t addr) {
     // Set register pointer to voltage register
     i2c_start_message(addr);
     i2c_send_byte(0x02);
-    i2c_stop_message();
 
     bool v_success = i2c_recv_bytes(addr, val, 2);
     res.voltage = (int16_t)(((uint16_t)val[0] << 8) | ((uint16_t)val[1] & 0xff));
