@@ -42,7 +42,7 @@ void init(void) {
     led_init();
     usb_init();
     i2c_init();
-    init_i2c_devices(true);
+    init_i2c_devices(false);
     servo_init();
     systick_init();
 
