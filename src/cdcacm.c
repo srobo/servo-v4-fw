@@ -196,8 +196,8 @@ static const char *usb_strings[] = {
     "Student Robotics",
     "Servo Board v4",
     (const char *)SERIALNUM_BOOTLOADER_LOC,
-	"Student Robotics Servo Board v4",  // Iface 1
-	"Student Robotics Servo Board DFU loader",  // IFace 2, DFU
+    "Student Robotics Servo Board v4",  // Iface 1
+    "Student Robotics Servo Board DFU loader",  // IFace 2, DFU
 };
 
 /* Buffer to be used for control requests. */

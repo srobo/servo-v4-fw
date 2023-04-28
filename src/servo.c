@@ -39,7 +39,7 @@ static void init_timer(void) {
     nvic_enable_irq(NVIC_TIM1_CC_IRQ);
 
     // Reset TIM1 peripheral.
-	rcc_periph_reset_pulse(RST_TIM1);
+    rcc_periph_reset_pulse(RST_TIM1);
 
     timer_disable_preload(TIM1);
     // Up counting, edge triggered no divider
