@@ -8,6 +8,7 @@
 #include <libopencm3/stm32/timer.h>
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/cm3/nvic.h>
+#include <libopencm3/cm3/cortex.h>
 
 #define US_TO_TICK(x) ((uint16_t)x / 5)
 #define TICK_TO_US(x) (x * 5)
@@ -208,8 +209,9 @@ static void calculate_phase_steps(uint8_t phase) {
         }
     }
 
-    /// TODO make sure this is atomic
-    memcpy(servo_steps[phase - 1], sorted_servo_steps, sizeof(servo_step_t) * SERVO_STEPS_PER_PHASE);
+    CM_ATOMIC_BLOCK() {
+        memcpy(servo_steps[phase - 1], sorted_servo_steps, sizeof(servo_step_t) * SERVO_STEPS_PER_PHASE);
+    }
 }
 
 static void set_expander_output(uint16_t val) {
