@@ -33,6 +33,13 @@ $ make -C bootloader
 ```
 The bootloader binary will then be at `bootloader/usb_dfu.bin`
 
+## LEDs
+
+There are 14 LEDs accessible from the firmware, 12 associated with servo outputs and 2 general status LEDs.
+The 12 associated with servo outputs are lit when the corresponding output is enabled.
+The blue status LED is lit once the MCU has initialised.
+The red status LED is lit when there is an I2C communication error, likely due to missing 12V power.
+
 ## USB Interface
 
 The Vendor ID is `1bda` (University of Southampton) and the product ID

@@ -31,12 +31,15 @@ int main(void) {
 }
 
 void init(void) {
+    // Configure main clock for 72Mhz
     rcc_clock_setup_pll(&rcc_hse_configs[RCC_CLOCK_HSE8_72MHZ]);
 
+    // Enable clock domains GPIOA, GPIOB and alternate functions
     rcc_periph_clock_enable(RCC_GPIOA);
     rcc_periph_clock_enable(RCC_GPIOB);
     rcc_periph_clock_enable(RCC_AFIO);
 
+    // Disable JTAG and leave SWD enabled
     AFIO_MAPR |= AFIO_MAPR_SWJ_CFG_JTAG_OFF_SW_ON;
 
     led_init();
