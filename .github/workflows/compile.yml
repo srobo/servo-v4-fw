@@ -3,11 +3,6 @@ name: Build binaries
 on:
   - push
   - workflow_dispatch
-# on:
-#   push:
-#     branches: [ master ]
-#   pull_request:
-#     branches: [ master ]
 
 jobs:
   build:
@@ -21,10 +16,10 @@ jobs:
       uses: carlosperate/arm-none-eabi-gcc-action@v1
       with:
         release: 11.2-2022.02
-    - name: Set up Python 3.7
+    - name: Set up Python 3.9
       uses: actions/setup-python@v4
       with:
-        python-version: 3.7
+        python-version: 3.9
     - name: Build libopencm3
       run: make lib
     - name: Make main binary

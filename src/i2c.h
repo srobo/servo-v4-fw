@@ -5,7 +5,9 @@
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
 
+// Value of current reading LSB on the INA219 in amps
 #define I_SENSE_LSB 0.001
+
 #define I_CAL_VAL(I_SHUNT_RES) ((uint16_t)(0.04096/(I_SHUNT_RES * I_SENSE_LSB)))
 #define INA219_CONF(PGA_MODE, ADC_MODE) ( 0x2000 | ((PGA_MODE & 0x3) << 11) | 0x180 | ((ADC_MODE & 0xF) << 3) | 0x7)
 

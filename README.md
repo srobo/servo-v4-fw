@@ -47,6 +47,8 @@ is `0011`.
 
 The Servo Board is controlled over USB serial, each command is its own line.
 
+Since the serial port is virtual, the baudrate is unused and can be set to any value.
+
 ### Serial Commands
 
 Action | Description | Command | Parameter Description | Return | Return Parameters
@@ -59,6 +61,7 @@ Set position | Set the position of a servo | SERVO:\<n>:SET:\<value> | \<n> serv
 Get position | Get the current position setting for a servo | SERVO:\<n>:GET? | \<n> servo number, int, 0-11 | \<value> | \<value> servo duty time, us, 500-4000
 Read servo current | Get total 5V current draw | SERVO:I? | - | \<current> | \<current> - current, int, measured in mA
 Read servo voltage | Get 5V SMPS output voltage | SERVO:V? | - | \<voltage> | \<voltage> - voltage, int, measured in mV
+Debug servo values | Print the internal values for servo pulses | *DBG:SERVO:\<phase> | \<phase> - Servo output phase number, int, 0-3 | \<phase data> | \<phase data> - Raw servo phase values
 
 ### udev Rule
 

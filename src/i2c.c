@@ -47,7 +47,7 @@ void i2c_start_message(uint8_t addr) {
     // Send START condition.
     i2c_send_start(I2C1);
 
-    // Waiting for START to send and switch to master mode.
+    // Waiting for START to send and switch to controller mode.
     while (!((I2C_SR1(I2C1) & I2C_SR1_SB)
         && (I2C_SR2(I2C1) & (I2C_SR2_MSL | I2C_SR2_BUSY))));
 
@@ -96,7 +96,7 @@ bool i2c_recv_bytes(uint8_t addr, uint8_t* buf, uint8_t len) {
     // Send START condition.
     i2c_send_start(I2C1);
 
-    // Waiting for START to send and switch to master mode.
+    // Waiting for START to send and switch to controller mode.
     while (!((I2C_SR1(I2C1) & I2C_SR1_SB)
         && (I2C_SR2(I2C1) & (I2C_SR2_MSL | I2C_SR2_BUSY))));
 
