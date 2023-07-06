@@ -28,7 +28,7 @@ def serial_flash_firmware(port, firmware):
         "both the USB and serial ports. Once connected press the board's pushbutton")
     input('Press enter once this is done')
 
-    asset_code = input("Enter asset code to bake into the bootloader: ")
+    asset_code = input("Enter asset code to bake into the bootloader (will have sr prepended): ")
     asset_code = 'sr' + asset_code.upper()
     print(f"Programming asset code: {asset_code}")
 
