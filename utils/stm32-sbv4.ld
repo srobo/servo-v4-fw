@@ -1,7 +1,8 @@
 /*
  * This file is part of the libopencm3 project.
  *
- * Copyright (C) 2012 Karl Palsson <karlp@tweak.net.au>
+ * Copyright (C) 2009 Uwe Hermann <uwe@hermann-uwe.de>
+ * Copyright (C) 2010 Thomas Otto <tommi@viadmin.org>
  *
  * This library is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -17,36 +18,31 @@
  * along with this library.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Linker script for STM32F100x6, 32K flash, 4K RAM. */
+/* A linker script for stm32f1 targets using libopencm3. */
 
 /* Define memory regions. */
 MEMORY
 {
-	rom (rx) : ORIGIN = 0x08000000, LENGTH = 32K
+	/* Skip first 8k for bootloader */
+	rom (rx) : ORIGIN = 0x08002000, LENGTH = 24K
 	ram (rwx) : ORIGIN = 0x20000000, LENGTH = 10K
 }
 
 /* Force linking of application main function */
 EXTERN(app_start_address);
 
-/* Enforce emmition of the vector table. */
+/* Enforce emission of the vector table. */
 EXTERN (vector_table)
 
 /* Define the entry point of the output file. */
-ENTRY(bootloader_entry)
+/* ENTRY(reset_handler) */
 
 /* Define sections. */
 SECTIONS
 {
 	.text : {
-		*usb_dfu_blob*.o*(.text*)
-		FILL(0)
-	. = 0x2000;
-	} >rom
-	.text : {
-		*(.lolstartup) /* Startup record for bootloader */
-		. = ALIGN(0x200); /* Vector table must be 9-bit aligned */
-				  /* This is wasteful, but not fatal */
+		*(.startup)
+		. = ALIGN(0x200); /* Vector table needs to be 9-bit aligned */
 		*(.vectors)	/* Vector table */
 		*(.text*)	/* Program code */
 		. = ALIGN(4);
@@ -93,9 +89,16 @@ SECTIONS
 	. = ALIGN(4);
 	_etext = .;
 
+	/* ram, but not cleared on reset, eg boot/app comms */
+	.noinit (NOLOAD) : {
+		*(.noinit*)
+	} >ram
+	. = ALIGN(4);
+
 	.data : {
 		_data = .;
 		*(.data*)	/* Read-write initialized data */
+		*(.ramtext*)    /* "text" functions to run in ram */
 		. = ALIGN(4);
 		_edata = .;
 	} >ram AT >rom
@@ -115,11 +118,6 @@ SECTIONS
 	/DISCARD/ : { *(.eh_frame) }
 
 	. = ALIGN(4);
-
-	 .text : {
-		FILL(0)
-		. = (0x8000 - _edata + _data);
-	} >rom
 	end = .;
 }
 

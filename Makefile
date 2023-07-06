@@ -1,95 +1,95 @@
-FW_VER=2
+##
+## This file is part of the libopencm3 project.
+##
+## Copyright (C) 2009 Uwe Hermann <uwe@hermann-uwe.de>
+##
+## This library is free software: you can redistribute it and/or modify
+## it under the terms of the GNU Lesser General Public License as published by
+## the Free Software Foundation, either version 3 of the License, or
+## (at your option) any later version.
+##
+## This library is distributed in the hope that it will be useful,
+## but WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+## GNU Lesser General Public License for more details.
+##
+## You should have received a copy of the GNU Lesser General Public License
+## along with this library.  If not, see <http://www.gnu.org/licenses/>.
+##
 
-PREFIX = arm-none-eabi
-CC = $(PREFIX)-gcc
-LD = $(PREFIX)-gcc
-SIZE = $(PREFIX)-size
-GDB = $(PREFIX)-gdb
-OBJCOPY = $(PREFIX)-objcopy
-OOCD = openocd
+PREFIX		?= arm-none-eabi-
 
-# Directory containing include/ and lib/ subdirectories of libopencm3 installation.
-LIBOPENCM3 ?= libopencm3
+TARGETS		:= src
 
-LDSCRIPT = stm32-sbv4.ld
-OOCD_BOARD = oocd/sbv4.cfg
+# Be silent per default, but 'make V=1' will show all compiler calls.
+ifneq ($(V),1)
+Q := @
+# Do not print "Entering directory ...".
+MAKEFLAGS += --no-print-directory
+endif
 
-# Export these facts to bootloader
-SR_BOOTLOADER_VID=0x1BDA  # ECS VID
-SR_BOOTLOADER_PID=0x0011  # Servo board PID
-SR_BOOTLOADER_REV=0x0402  # BCD version, board 4.0.
-SR_BOOTLOADER_FLASHSIZE=0x8000  # 32kb of onboard flash.
-export SR_BOOTLOADER_VID SR_BOOTLOADER_PID SR_BOOTLOADER_REV SR_BOOTLOADER_FLASHSIZE
+OPENCM3_DIR ?= $(realpath libopencm3)
+EXAMPLE_RULES = bin
 
-CFLAGS += -mcpu=cortex-m3 -mthumb -msoft-float -DSTM32F1 \
-	  -Wall -Wextra -Os -std=gnu99 -g -fno-common \
-	  -I$(LIBOPENCM3)/include -DFW_VER=$(FW_VER) -g \
-	  -DSR_DEV_VID=$(SR_BOOTLOADER_VID) \
-	  -DSR_DEV_PID=$(SR_BOOTLOADER_PID) \
-	  -DSR_DEV_REV=$(SR_BOOTLOADER_REV)
-BASE_LDFLAGS += -lc -lm -L$(LIBOPENCM3)/lib \
-	   -L$(LIBOPENCM3)/lib/stm32/f1 -lnosys \
-	   -nostartfiles -Wl,--gc-sections,-Map=sbv4.map -mcpu=cortex-m3 \
-	   -mthumb -march=armv7-m -mfix-cortex-m3-ldrd -msoft-float
-LDFLAGS = $(BASE_LDFLAGS) -T$(LDSCRIPT)
+all: build
 
-BOOTLOADER_OBJS = dfu-bootloader/usb_dfu_blob.o dfu-bootloader/usbdfu.o
-O_FILES = main.o led.o sbusb.o servo.o $(BOOTLOADER_OBJS)
-TEST_O_FILES = test.o led.o servo.o usart.o $(BOOTLOADER_OBJS)
+bin: EXAMPLE_RULES += bin
+hex: EXAMPLE_RULES += hex
+srec: EXAMPLE_RULES += srec
+list: EXAMPLE_RULES += list
+images: EXAMPLE_RULES += images
 
-all: force_bootloader.o bootloader $(O_FILES) sbv4.bin sbv4_test.bin sbv4_noboot.bin
+bin: build
+hex: build
+srec: build
+list: build
+images: build
 
-test: sbv4_test.bin
+build: lib examples
 
-include depend
+lib:
+	$(Q)if [ ! "`ls -A $(OPENCM3_DIR)`" ] ; then \
+		printf "######## ERROR ########\n"; \
+		printf "\tlibopencm3 is not initialized.\n"; \
+		printf "\tPlease run:\n"; \
+		printf "\t$$ git submodule init\n"; \
+		printf "\t$$ git submodule update\n"; \
+		printf "\tbefore running make.\n"; \
+		printf "######## ERROR ########\n"; \
+		exit 1; \
+		fi
+	$(Q)$(MAKE) -C $(OPENCM3_DIR)
 
-bootloader:
-	FORCE_BOOTLOADER_OBJ=`pwd`/force_bootloader.o $(MAKE) -C dfu-bootloader
+EXAMPLE_DIRS:=$(sort $(dir $(wildcard $(addsuffix /Makefile,$(TARGETS)))))
+$(EXAMPLE_DIRS): lib
+	@printf "  BUILD   $@\n";
+	$(Q)$(MAKE) --directory=$@ OPENCM3_DIR=$(OPENCM3_DIR) $(EXAMPLE_RULES)
 
-sbv4.elf: $(O_FILES) $(LDSCRIPT)
-	$(LD) -o $@ $(O_FILES) $(LDFLAGS) -lopencm3_stm32f1
-	$(SIZE) $@
+examples: $(EXAMPLE_DIRS)
+	$(Q)true
 
-sbv4_test.elf: $(TEST_O_FILES) $(LDSCRIPT)
-	$(LD) -o $@ $(TEST_O_FILES) $(LDFLAGS) -lopencm3_stm32f1
-	$(SIZE) $@
+examplesclean: $(EXAMPLE_DIRS:=.clean)
 
-sbv4.bin: sbv4.elf
-	$(OBJCOPY) -O binary $< $@
-	dfu-bootloader/crctool -S 8192 -w $@  # Ignore the first 8192 bytes (the bootloader blob).
+clean: examplesclean styleclean
+	$(Q)$(MAKE) -C libopencm3 clean
 
-sbv4_test.bin: sbv4_test.elf
-	$(OBJCOPY) -O binary $< $@
+stylecheck: $(EXAMPLE_DIRS:=.stylecheck)
+styleclean: $(EXAMPLE_DIRS:=.styleclean)
 
-# Produce a no-bootloader binary, suitable for shunting straight into the app
-# segment of flash, by droping the first 8k of the flat image.
-sbv4_noboot.bin: sbv4.elf
-	tmpfile=`mktemp /tmp/sr-sbv4-XXXXXXXX`; $(OBJCOPY) -O binary $< $$tmpfile; dd if=$$tmpfile of=$@ bs=4k skip=2; rm $$tmpfile
-	dfu-bootloader/crctool -w $@
 
-depend: *.c
-	rm -f depend
-	for file in $^; do \
-		$(CC) $(CFLAGS) -MM $$file -o - >> $@ ; \
-	done ;
+%.clean:
+	$(Q)if [ -d $* ]; then \
+		printf "  CLEAN   $*\n"; \
+		$(MAKE) -C $* clean OPENCM3_DIR=$(OPENCM3_DIR) || exit $?; \
+	fi;
 
-.PHONY: all test clean flash bootloader
+%.styleclean:
+	$(Q)$(MAKE) -C $* styleclean OPENCM3_DIR=$(OPENCM3_DIR)
 
-flash: sbv4.elf
-	$(OOCD) -f "$(OOCD_BOARD)" \
-	        -c "init" \
-	        -c "reset init" \
-	        -c "stm32f1x mass_erase 0" \
-	        -c "flash write_image $<" \
-	        -c "reset" \
-	        -c "shutdown"
+%.stylecheck:
+	$(Q)$(MAKE) -C $* stylecheck OPENCM3_DIR=$(OPENCM3_DIR)
 
-debug: sbv4.elf
-	$(OOCD) -f "$(OOCD_BOARD)" \
-	        -c "init" \
-	        -c "reset halt" &
-	$(GDB)  $^ -ex "target remote localhost:3333" -ex "mon reset halt" && killall openocd
 
-clean:
-	$(MAKE) -C dfu-bootloader clean
-	-rm -f sbv4.elf depend *.o
+.PHONY: build lib examples $(EXAMPLE_DIRS) install clean stylecheck styleclean \
+        bin hex srec list images
+

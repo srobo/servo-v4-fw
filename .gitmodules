@@ -1,6 +1,6 @@
 [submodule "libopencm3"]
 	path = libopencm3
-	url = git://github.com/libopencm3/libopencm3.git
-[submodule "dfu-bootloader"]
-	path = dfu-bootloader
-	url = ../dfu-bootloader
+	url = https://github.com/libopencm3/libopencm3.git
+[submodule "bootloader/dfu-bootloader"]
+	path = bootloader/dfu-bootloader
+	url = https://github.com/srobo/dfu-bootloader.git
